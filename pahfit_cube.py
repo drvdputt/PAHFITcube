@@ -129,6 +129,20 @@ def extract_spectra(cube_dicts, sky_apertures):
 def main():
     c = get_SAGE_cubes("hii1_hii8")
     quicklook_cubes(c)
+    ra_center = 73.03
+    dec_center = -66.923
+    num_ra_pix = 16
+    num_dec_pix = 10
+    delt = 0.06 / num_ra_pix  # the desired ra size = ra span / num pix
+    apr = make_square_aperture_grid(
+        ra_center, dec_center, delt, num_ra_pix, num_dec_pix
+    )
+    result = extract_spectra(c, apr)
+    print(result)
+    plt.figure()
+    for i in range(1, result.shape[1]):
+        plt.plot(result[:, 0], result[:, i])
+    plt.show()
 
 
 main()
