@@ -175,22 +175,22 @@ def extract_spectra(cube_dicts, sky_apertures):
 def main():
     ra_center = 73.03
     dec_center = -66.923
-    num_ra_pix = 1
-    num_dec_pix = 1
-    delt = 0.01
+    num_ra_pix = 20
+    num_dec_pix = 10
+    delt = 0.001
     apr = make_square_aperture_grid(
         ra_center, dec_center, delt, num_ra_pix, num_dec_pix
     )
     print(apr)
     c = get_SAGE_cubes("hii1_hii8")
-    quicklook_cubes(c)
-    # quicklook_cubes(c, apr)
-    # result = extract_spectra(c, apr)
-    # print(result)
-    # plt.figure()
-    # for i in range(1, result.shape[1]):
-    #     plt.plot(result[:, 0], result[:, i])
-    # plt.show()
+    quicklook_cubes(c, apr)
+    plt.title("A slice from each cube and apertures used")
+    result = extract_spectra(c, apr)
+    print(result)
+    plt.figure()
+    for i in range(1, result.shape[1]):
+        plt.plot(result[:, 0], result[:, i])
+    plt.title("Spectra extracted using apertures")
 
     # Different approach: try using reproject package
     wavs, cube = reproject_and_merge(
@@ -199,9 +199,13 @@ def main():
     print(wavs)
     print(cube)
     plt.figure()
-    plt.imshow(cube[cube.shape[0] // 2])
+    w = cube.shape[0] // 2
+    wval = wavs[w]
+    plt.imshow(cube[w])
+    plt.title(f"Final cube at {wval} micron")
     plt.figure()
     plt.plot(wavs, cube.reshape(cube.shape[0], cube.shape[1] * cube.shape[2]))
+    plt.title("SED for each pixel of final cube")
     plt.show()
 
 main()
