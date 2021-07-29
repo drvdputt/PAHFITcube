@@ -50,8 +50,8 @@ def quicklook_cubes(cubes):
         ax = fig.add_subplot(2, 2, i + 1, projection=cube["wcs"])
         ax.imshow(cube["cube"].data[-1])
         ax.grid()
-
-    plt.show()
+        ax.coords[0].set_format_unit(u.degree, decimal=True)
+        ax.coords[1].set_format_unit(u.degree, decimal=True)
 
 
 # the wcs we want our final map to have
