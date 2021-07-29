@@ -22,6 +22,7 @@ from astropy import units as u
 from pathlib import Path
 from matplotlib import pyplot as plt
 from photutils.aperture import SkyRectangularAperture, aperture_photometry
+import reproject
 
 
 def read_spitzer_cube(fn):
@@ -43,15 +44,16 @@ def get_SAGE_cubes(target):
     return cubes
 
 
-def quicklook_cubes(cubes):
+def quicklook_cubes(cube_dicts, apertures=None):
     fig = plt.gcf()
-    names = ["LL1", "LL2", "SL1", "SL2"]
-    for i, cube in enumerate(cubes):
+    for i, cube in enumerate(cube_dicts):
         ax = fig.add_subplot(2, 2, i + 1, projection=cube["wcs"])
         ax.imshow(cube["cube"].data[-1])
         ax.grid()
         ax.coords[0].set_format_unit(u.degree, decimal=True)
         ax.coords[1].set_format_unit(u.degree, decimal=True)
+        if apertures is not None:
+            apertures.to_pixel(cube["wcs"]).plot(axes=ax)
 
 
 # the wcs we want our final map to have
@@ -78,6 +80,50 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     w.wcs.cdelt = [pix_angle_delta, pix_angle_delta]
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     return w
+
+
+def reproject_and_merge(
+    cube_dicts, center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
+):
+    """Reproject all four cubes onto pixel grid wcs, and merge the result."""
+    output_projection = make_ra_dec_wcs(
+        center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
+    )
+    wavtables = [d["wavelength"] for d in cube_dicts]
+    output_wavs = np.concatenate(wavtables)
+    nw = len(output_wavs)
+
+    ny, nx = npix_dec, npix_ra
+    output_cube_array = np.zeros((nw, ny, nx))
+
+    start = 0
+    for d in cube_dicts:
+        stop = start + len(d["wavelength"])
+        output_cube_array[start:stop] = reproject_cube(d, output_projection, ny, nx)
+        start = stop
+
+    return output_wavs, output_cube_array
+
+
+def reproject_cube(cube_dict, wcs, ny, nx):
+    """Reproject every slice of cube onto wcs, ny, nx.
+
+    Returns
+    -------
+    output_array: np.ndarray indexed on wavelength, y, x
+    """
+    num_wavs = len(cube_dict["wavelength"])
+    input_array = cube_dict["cube"].data
+    input_wcs = cube_dict["wcs"]
+
+    output_array = np.zeros((num_wavs, ny, nx))
+    for w in range(num_wavs):
+        output_array[w], footprint = reproject.reproject_adaptive(
+            input_data=(input_array[w], input_wcs),
+            output_projection=wcs,
+            shape_out=(ny, nx),
+        )
+    return output_array
 
 
 def make_square_aperture_grid(
@@ -127,22 +173,35 @@ def extract_spectra(cube_dicts, sky_apertures):
 
 
 def main():
-    c = get_SAGE_cubes("hii1_hii8")
-    quicklook_cubes(c)
     ra_center = 73.03
     dec_center = -66.923
-    num_ra_pix = 16
-    num_dec_pix = 10
-    delt = 0.06 / num_ra_pix  # the desired ra size = ra span / num pix
+    num_ra_pix = 1
+    num_dec_pix = 1
+    delt = 0.01
     apr = make_square_aperture_grid(
         ra_center, dec_center, delt, num_ra_pix, num_dec_pix
     )
-    result = extract_spectra(c, apr)
-    print(result)
-    plt.figure()
-    for i in range(1, result.shape[1]):
-        plt.plot(result[:, 0], result[:, i])
-    plt.show()
+    print(apr)
+    c = get_SAGE_cubes("hii1_hii8")
+    quicklook_cubes(c)
+    # quicklook_cubes(c, apr)
+    # result = extract_spectra(c, apr)
+    # print(result)
+    # plt.figure()
+    # for i in range(1, result.shape[1]):
+    #     plt.plot(result[:, 0], result[:, i])
+    # plt.show()
 
+    # Different approach: try using reproject package
+    wavs, cube = reproject_and_merge(
+        c, ra_center, dec_center, delt, num_ra_pix, num_dec_pix
+    )
+    print(wavs)
+    print(cube)
+    plt.figure()
+    plt.imshow(cube[cube.shape[0] // 2])
+    plt.figure()
+    plt.plot(wavs, cube.reshape(cube.shape[0], cube.shape[1] * cube.shape[2]))
+    plt.show()
 
 main()
