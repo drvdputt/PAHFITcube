@@ -73,11 +73,11 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     # center of each pixel = 1, 2, 3, ...
     # 3 pixels --> center is 2
     # 4 pixels --> center is 2.5 (border between 2 and 3)
-    center_x = center_ra / 2 + 0.5
-    center_y = center_dec / 2 + 0.5
+    center_x = npix_ra / 2 + 0.5
+    center_y = npix_dec / 2 + 0.5
     w.wcs.crpix = [center_x, center_y]
     w.wcs.crval = [center_ra, center_dec]
-    w.wcs.cdelt = [pix_angle_delta, pix_angle_delta]
+    w.wcs.cdelt = [-pix_angle_delta, pix_angle_delta]
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     return w
 
