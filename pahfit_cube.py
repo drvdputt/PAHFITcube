@@ -53,7 +53,7 @@ def quicklook_cubes(cube_dicts, apertures=None):
         ax.coords[0].set_format_unit(u.degree, decimal=True)
         ax.coords[1].set_format_unit(u.degree, decimal=True)
         if apertures is not None:
-            apertures.to_pixel(cube["wcs"]).plot(axes=ax)
+            apertures.to_pixel(cube["wcs"]).plot(axes=ax, color="r")
 
 
 # the wcs we want our final map to have
