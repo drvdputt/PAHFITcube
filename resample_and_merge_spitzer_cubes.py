@@ -85,12 +85,14 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
 def reproject_and_merge(
     cube_dicts, center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
 ):
-    """Reproject all four cubes onto pixel grid wcs, and merge the result."""
+    """Reproject all four cubes onto pixel grid wcs, and merge the result.
+
+    Result is sorted by wavelength"""
     output_projection = make_ra_dec_wcs(
         center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
     )
     wavtables = [d["wavelength"] for d in cube_dicts]
-    output_wavs = np.concatenate(wavtables)
+    output_wavs = np.concatenate(wavtables).flatten()
     nw = len(output_wavs)
 
     ny, nx = npix_dec, npix_ra
@@ -102,6 +104,9 @@ def reproject_and_merge(
         output_cube_array[start:stop] = reproject_cube(d, output_projection, ny, nx)
         start = stop
 
+    order = np.argsort(output_wavs)
+    output_wavs = output_wavs[order]
+    output_cube_array = output_cube_array[order]
     return output_wavs, output_cube_array
 
 
@@ -176,7 +181,7 @@ def main():
     ra_center = 73.03
     dec_center = -66.923
     num_ra_pix = 20
-    num_dec_pix = 10
+    num_dec_pix = 1
     delt = 0.001
     apr = make_square_aperture_grid(
         ra_center, dec_center, delt, num_ra_pix, num_dec_pix
@@ -196,8 +201,6 @@ def main():
     wavs, cube = reproject_and_merge(
         c, ra_center, dec_center, delt, num_ra_pix, num_dec_pix
     )
-    print(wavs)
-    print(cube)
     plt.figure()
     w = cube.shape[0] // 2
     wval = wavs[w]
