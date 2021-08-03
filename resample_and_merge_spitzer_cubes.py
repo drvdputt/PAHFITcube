@@ -82,8 +82,8 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     return w
 
 
-def reproject_and_merge(
-    cube_dicts, center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
+def reproject_and_merge_cubes(
+    cube_dicts, center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec, filename=None
 ):
     """Reproject all four cubes onto pixel grid wcs, and merge the result.
 
@@ -107,6 +107,27 @@ def reproject_and_merge(
     order = np.argsort(output_wavs)
     output_wavs = output_wavs[order]
     output_cube_array = output_cube_array[order]
+
+    if filename is not None:
+        # multi extension (wav list and cube)
+        new_hdul = fits.HDUList()
+        # cube as primary hdu
+        header = output_projection.to_header()
+        header["PC3_3"] = 1
+        header["CRPIX3"] = 1
+        header["CRVAL3"] = 1
+        header["CTYPE3"] = "WAVE-TAB"
+        header["CUNIT3"] = "um"
+        header["PS3_0"] = "WCS-TAB"
+        header["PS3_1"] = "WAVELENGTH"
+        print(header)
+        new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
+        # wavs as bintable hdu
+        wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="K")
+        new_hdul.append(fits.BinTableHDU.from_columns([wav_col]))
+
+        new_hdul.writeto(filename)
+
     return output_wavs, output_cube_array
 
 
@@ -180,13 +201,13 @@ def extract_spectra(cube_dicts, sky_apertures):
 def main():
     ra_center = 73.03
     dec_center = -66.923
-    num_ra_pix = 20
-    num_dec_pix = 1
+    num_ra_pix = 15
+    num_dec_pix = 10
     delt = 0.001
     apr = make_square_aperture_grid(
         ra_center, dec_center, delt, num_ra_pix, num_dec_pix
     )
-    print(apr)
+    # print(apr)
     c = get_SAGE_cubes("hii1_hii8")
     quicklook_cubes(c, apr)
     plt.title("A slice from each cube and apertures used")
@@ -198,8 +219,9 @@ def main():
     plt.title("Spectra extracted using apertures")
 
     # Different approach: try using reproject package
-    wavs, cube = reproject_and_merge(
-        c, ra_center, dec_center, delt, num_ra_pix, num_dec_pix
+    output_fn = "reprojected.fits"
+    wavs, cube = reproject_and_merge_cubes(
+        c, ra_center, dec_center, delt, num_ra_pix, num_dec_pix, filename=output_fn
     )
     plt.figure()
     w = cube.shape[0] // 2
