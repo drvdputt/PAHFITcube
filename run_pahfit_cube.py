@@ -16,22 +16,18 @@ def main():
 
     cube_spaxel_infos = read_cube(args.spectrumfile)
 
-    # setup the base model. The fitting for each spaxel will start from a
-    # copy of this. Later, fitting could be optimized by being smarter,
-    # and using information about neighbouring spaxels instead of
-    # starting from scratch each time.
-    pmodel_original = initialize_model(
-        args.packfile, obsdata, not args.no_starting_estimate
-    )
-
     for spaxel_info in cube_spaxel_infos:
         # get pixel indices (tentative)
         x = spaxel_info["x"]
         y = spaxel_info["y"]
-
-        # get obsdata equivalent for this cube
+        # get obsdata for this spaxel
         obsdata = spaxel_info["obsdata"]
-        pmodel = pmodel_original.copy()
+        # setup the base model. Later, fitting could be optimized by being
+        # smarter, and using information about neighbouring spaxels instead
+        # of starting from scratch each time.
+        pmodel = initialize_model(
+            args.packfile, obsdata, not args.no_starting_estimate
+        )
         obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
 
         # for now, we will save the results to separate files. But
