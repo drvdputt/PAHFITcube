@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pahfit.helpers import initialize_model, fit_spectrum
 from pahfit.scripts.run_pahfit import initialize_parser
-from itertools import product, repeat
+from itertools import product
 from astropy.io import fits
 from astropy.table import Table
 from astropy import units as u
@@ -43,7 +43,9 @@ def fit_spaxel(spaxel_info, args):
     # for now, we will save the results to separate files. But
     # later, we should not have a file per pixel, with all features,
     # but a file per feature, with all pixels.
-    outputname = args.spectrumfile.split(".")[0] + f"_x{x}y{y}"
+    basename = args.spectrumfile.split(".")[0]
+    output_dir = "basename/"
+    outputname = output_dir + basename + f"_x{x}y{y}"
     pmodel.save(obsfit, outputname, args.saveoutput)
 
 
