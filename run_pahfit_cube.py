@@ -34,7 +34,7 @@ def main():
         # for now, we will save the results to separate files. But
         # later, we should not have a file per pixel, with all features,
         # but a file per feature, with all pixels.
-        outputname = args.spectrumfile.split(".")[0] + "_x{}y{}"
+        outputname = args.spectrumfile.split(".")[0] + f"_x{x}y{y}"
         pmodel.save(obsfit, outputname, args.saveoutput)
 
 
