@@ -1,7 +1,10 @@
-from pahfit.helpers import read_spectrum, initialize_model, fit_spectrum
+#!/usr/bin/env python3
+from pahfit.helpers import initialize_model, fit_spectrum
 from pahfit.scripts.run_pahfit import initialize_parser
 from itertools import product
-import numpy as np
+from astropy.io import fits
+from astropy.table import Table
+from astropy import units as u
 
 
 def main():
@@ -25,9 +28,7 @@ def main():
         # setup the base model. Later, fitting could be optimized by being
         # smarter, and using information about neighbouring spaxels instead
         # of starting from scratch each time.
-        pmodel = initialize_model(
-            args.packfile, obsdata, not args.no_starting_estimate
-        )
+        pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
         obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
 
         # for now, we will save the results to separate files. But
@@ -50,7 +51,8 @@ def read_cube(cubefile):
     ----------
     cubefile : string
         File with the spectral cube to be fit. The cube should be in the
-        format desribed in <link needed>.
+        format desribed in <link needed>. The cube file (of the same
+        shape) containing the uncertainties should be "name_unc.fits".
 
     Returns
     -------
@@ -59,16 +61,32 @@ def read_cube(cubefile):
         space), 'y' is y coordinate of pixel (in pixel space), 'obsdata'
         is a dict in the same format as the output of read_spectrum.
     """
-    # loop over all spaxels of the cube. Still need to write out the cube
-    # we will use here in resample_and_merge_spitzer_cubes.py.
+    cube_hdu = fits.open(cubefile)["PRIMARY"]
+    cube_unit = u.Unit(cube_hdu.header["BUNIT"])
+    cube_data = cube_hdu.data
+    cube_qty = cube_data * cube_unit
+
+    cube_unc_data = fits.getdata(cubefile.replace(".fits", "_unc.fits"))
+    cube_unc_qty = cube_unc_data * cube_unit
+
+    wavtable = Table.read(cubefile)
+    cube_wavs = wavtable["WAVELENGTH"].quantity
+
+    if cube_data.shape != cube_unc_data.shape:
+        print("Uncertainties cube has wrong shape!")
+        exit()
+
+    if len(wavtable) != cube_data.shape[0]:
+        print("Wavelength table and cube are not compatible")
+        exit()
+
+    nwavs, ny, nx = cube_data.shape
+
     spaxel_infos = []
-    nx = 5
-    ny = 5
-    nwavs = 80
-    cube_data = np.zeros((nwavs, ny, nx))
-    cube_unc = np.zeros((nwavs, ny, nx))
-    cube_wavs = np.zeros(nwavs)
     for x, y in product(range(nx), range(ny)):
-        obsdata = {"x": cube_wavs, "y": cube_data[:, y, x], "unc": cube_unc[:, y, x]}
+        obsdata = {"x": cube_wavs, "y": cube_qty[:, y, x], "unc": cube_unc_qty[:, y, x]}
         spaxel_infos.append({"x": x, "y": y, "obsdata": obsdata})
     return spaxel_infos
+
+
+main()
