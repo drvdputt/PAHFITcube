@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 from pahfit.helpers import initialize_model, fit_spectrum
 from pahfit.scripts.run_pahfit import initialize_parser
-from itertools import product
+from itertools import product, repeat
 from astropy.io import fits
 from astropy.table import Table
 from astropy import units as u
+from multiprocessing import Pool
 
 
 def main():
@@ -14,32 +15,36 @@ def main():
     # and those set in initialize_parser, so that the single spectrum
     # and the cube case can each have there own arguments, without
     # unnecessary duplication.
-
     args = parser.parse_args()
-
     cube_spaxel_infos = read_cube(args.spectrumfile)
-
-    for spaxel_info in cube_spaxel_infos:
-        # get pixel indices (tentative)
-        x = spaxel_info["x"]
-        y = spaxel_info["y"]
-        # get obsdata for this spaxel
-        obsdata = spaxel_info["obsdata"]
-        # setup the base model. Later, fitting could be optimized by being
-        # smarter, and using information about neighbouring spaxels instead
-        # of starting from scratch each time.
-        pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
-        obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
-
-        # for now, we will save the results to separate files. But
-        # later, we should not have a file per pixel, with all features,
-        # but a file per feature, with all pixels.
-        outputname = args.spectrumfile.split(".")[0] + f"_x{x}y{y}"
-        pmodel.save(obsfit, outputname, args.saveoutput)
+    with Pool(7) as p:
+        p.starmap(
+            fit_spaxel,
+            [(cube_spaxel_infos[i], args) for i in range(len(cube_spaxel_infos))],
+            1,
+        )
 
 
-def fit_spaxel():
-    pass
+def fit_spaxel(spaxel_info, args):
+    """
+    Fits a single spaxel, write out to separate files
+    """
+    # get pixel indices (tentative)
+    x = spaxel_info["x"]
+    y = spaxel_info["y"]
+    # get obsdata for this spaxel
+    obsdata = spaxel_info["obsdata"]
+    # setup the base model. Later, fitting could be optimized by being
+    # smarter, and using information about neighbouring spaxels instead
+    # of starting from scratch each time.
+    pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
+    obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
+
+    # for now, we will save the results to separate files. But
+    # later, we should not have a file per pixel, with all features,
+    # but a file per feature, with all pixels.
+    outputname = args.spectrumfile.split(".")[0] + f"_x{x}y{y}"
+    pmodel.save(obsfit, outputname, args.saveoutput)
 
 
 def read_cube(cubefile):
@@ -89,4 +94,5 @@ def read_cube(cubefile):
     return spaxel_infos
 
 
-main()
+if __name__ == "__main__":
+    main()
