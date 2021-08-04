@@ -40,8 +40,10 @@ def read_spitzer_cube(fn):
     return dict(filename=fn, cube=cube, wavelength=wavs, wcs=wcs)
 
 
-def get_SAGE_cubes(target):
+def get_SAGE_cubes(target, uncertainty=False):
     """Get all 4 Spitzer IFU cubes (LL1, LL2, SL1, SL2).
+
+    uncertainty : if True, loads the uncertainty cubes instead
 
     Returns
     -------
@@ -52,8 +54,11 @@ def get_SAGE_cubes(target):
     cube_names = ["ll_LL1", "ll_LL2", "sl_SL1", "sl_SL2"]
     cubes = []
     for cube_name in cube_names:
-        fname = d / f"{target}_{cube_name}_cube.fits"
-        cubes.append(read_spitzer_cube(str(fname)))
+        fname = f"{target}_{cube_name}_cube.fits"
+        # reuse this function
+        if uncertainty:
+            fname = fname.replace("cube.fits", "cube_unc.fits")
+        cubes.append(read_spitzer_cube(str(d / fname)))
 
     return cubes
 
@@ -228,21 +233,35 @@ def main():
         ra_center, dec_center, delt, num_ra_pix, num_dec_pix
     )
     # print(apr)
-    c = get_SAGE_cubes("hii1_hii8")
-    quicklook_cubes(c, apr)
+    target = "hii1_hii8"
+    cube_dicts = get_SAGE_cubes(target)
+    quicklook_cubes(cube_dicts, apr)
     plt.title("A slice from each cube and apertures used")
-    result = extract_spectra(c, apr)
-    print(result)
-    plt.figure()
-    for i in range(1, result.shape[1]):
-        plt.plot(result[:, 0], result[:, i])
-    plt.title("Spectra extracted using apertures")
 
-    # Different approach: try using reproject package
     output_fn = "reprojected.fits"
     wavs, cube = reproject_and_merge_cubes(
-        c, ra_center, dec_center, delt, num_ra_pix, num_dec_pix, filename=output_fn
+        cube_dicts,
+        ra_center,
+        dec_center,
+        delt,
+        num_ra_pix,
+        num_dec_pix,
+        filename=output_fn,
     )
+
+    # do the same for the uncertainties
+    cube_unc_dicts = get_SAGE_cubes(target, uncertainty=True)
+    output_fn_unc = output_fn.replace(".fits", "_unc.fits")
+    wavs_unc, cube_unc = reproject_and_merge_cubes(
+        cube_unc_dicts,
+        ra_center,
+        dec_center,
+        delt,
+        num_ra_pix,
+        num_dec_pix,
+        filename=output_fn_unc,
+    )
+
     plt.figure()
     w = cube.shape[0] // 2
     wval = wavs[w]
