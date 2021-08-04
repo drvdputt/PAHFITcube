@@ -139,10 +139,13 @@ def reproject_and_merge_cubes(
         print(header)
         new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
         # wavs as bintable hdu
-        wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="K")
-        new_hdul.append(fits.BinTableHDU.from_columns([wav_col]))
-
-        new_hdul.writeto(filename)
+        wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="D")
+        wavhdu = fits.BinTableHDU.from_columns([wav_col])
+        wavhdu.header["EXTNAME"] = "WCS-TAB"
+        wavhdu.header["TUNIT1"] = "um"
+        new_hdul.append(wavhdu)
+        # write
+        new_hdul.writeto(filename, overwrite=True)
 
     return output_wavs, output_cube_array
 
