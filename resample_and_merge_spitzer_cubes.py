@@ -26,6 +26,14 @@ import reproject
 
 
 def read_spitzer_cube(fn):
+    """
+    Get the data cube, wavelength table and WCS.
+
+    Returns
+    -------
+    dict : dict with 'cube' = Primary HDU, 'wavelength' = wavelength
+        table, 'wcs' = WCS
+    """
     cube = fits.open(fn)[0]
     wavs = Table.read(fn)["WAVELENGTH"][0]
     wcs = WCS(fn, naxis=2)
@@ -33,6 +41,12 @@ def read_spitzer_cube(fn):
 
 
 def get_SAGE_cubes(target):
+    """Get all 4 Spitzer IFU cubes (LL1, LL2, SL1, SL2).
+
+    Returns
+    -------
+    cubes : list of dicts (see read_spitzer_cube for format)
+    """
     dname = f"data/sage-spec_{target}_4dec08"
     d = Path(dname)
     cube_names = ["ll_LL1", "ll_LL2", "sl_SL1", "sl_SL2"]
@@ -45,6 +59,7 @@ def get_SAGE_cubes(target):
 
 
 def quicklook_cubes(cube_dicts, apertures=None):
+    """Display 4 cubes and a set of apertures in a 2x2 grid."""
     fig = plt.gcf()
     for i, cube in enumerate(cube_dicts):
         ax = fig.add_subplot(2, 2, i + 1, projection=cube["wcs"])
@@ -85,7 +100,8 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
 def reproject_and_merge_cubes(
     cube_dicts, center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec, filename=None
 ):
-    """Reproject all four cubes onto pixel grid wcs, and merge the result.
+    """
+    Reproject all four cubes onto pixel grid wcs, and merge the result.
 
     Result is sorted by wavelength"""
     output_projection = make_ra_dec_wcs(
@@ -132,7 +148,8 @@ def reproject_and_merge_cubes(
 
 
 def reproject_cube(cube_dict, wcs, ny, nx):
-    """Reproject every slice of cube onto wcs, ny, nx.
+    """
+    Reproject every slice of cube onto wcs, ny, nx.
 
     Returns
     -------
@@ -155,12 +172,12 @@ def reproject_cube(cube_dict, wcs, ny, nx):
 def make_square_aperture_grid(
     center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
 ):
-    """Create sky apertures representing pixels of RA-DEC aligned map.
+    """
+    Create sky apertures representing pixels of RA-DEC aligned map.
 
     Use sky apertures immediately (instead of starting with pixel
     apertures and then converting), to make picking the right size
     easier.
-
     """
     # all xy pairs
     X, Y = np.mgrid[:npix_ra, :npix_dec]
@@ -232,5 +249,6 @@ def main():
     plt.plot(wavs, cube.reshape(cube.shape[0], cube.shape[1] * cube.shape[2]))
     plt.title("SED for each pixel of final cube")
     plt.show()
+
 
 main()
