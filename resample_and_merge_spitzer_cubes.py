@@ -141,7 +141,7 @@ def reproject_and_merge_cubes(
         header["CUNIT3"] = "um"
         header["PS3_0"] = "WCS-TAB"
         header["PS3_1"] = "WAVELENGTH"
-        print(header)
+        header["BUNIT"] = "MJy/sr"
         new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
         # wavs as bintable hdu
         wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="D")
