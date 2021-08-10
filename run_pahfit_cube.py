@@ -6,6 +6,9 @@ from astropy.io import fits
 from astropy.table import Table
 from astropy import units as u
 from multiprocessing import Pool
+from pathlib import Path
+from astropy.wcs import WCS
+import numpy as np
 
 
 def main():
@@ -16,18 +19,87 @@ def main():
     # and the cube case can each have there own arguments, without
     # unnecessary duplication.
     args = parser.parse_args()
-    cube_spaxel_infos = read_cube(args.spectrumfile)
-    with Pool(7) as p:
-        p.starmap(
-            fit_spaxel,
-            [(cube_spaxel_infos[i], args) for i in range(len(cube_spaxel_infos))],
-            1,
-        )
+    cube_spaxel_infos, map_info = read_cube(args.spectrumfile)
+
+    multiproc = False
+    if multiproc:
+        with Pool(7) as p:
+            # do it like this as long as memory for all the pmodels is not
+            # an issue. If it becomes an issue, look at parallel iterators
+            obsfits = p.starmap(
+                fit_spaxel,
+                [(cube_spaxel_infos[i], args) for i in range(len(cube_spaxel_infos))],
+                1,
+            )
+    else:
+        obsfits = [fit_spaxel(s, args) for s in cube_spaxel_infos]
+
+    # make sure the spaxel infos and the obsfits are in the same order:
+    maps_dict = initialize_maps_dict(obsfits[0], shape=(map_info["ny"], map_info["nx"]))
+    for spaxel_info, obsfit in zip(cube_spaxel_infos, obsfits):
+        x = spaxel_info["x"]
+        y = spaxel_info["y"]
+        for component in obsfit:
+            for i, value in enumerate(component.parameters):
+                key = feature_name(component, i)
+                maps_dict[key][y, x] = value
+
+    # save the maps
+    header = map_info["wcs"].to_header()
+    new_hdul = fits.HDUList()
+    for key in maps_dict:
+        hdu = fits.ImageHDU(data=maps_dict[key], header=header, name=key)
+        new_hdul.append(hdu)
+
+    basename = args.spectrumfile.split(".")[0]
+    output_dir = Path(".") / basename
+    output_dir.mkdir(exist_ok=True)
+    filename = str(output_dir / basename) + "_parameter_maps.fits"
+    new_hdul.writeto(filename, overwrite=True)
+
+
+def initialize_maps_dict(obsfit, shape):
+    """Initialize every output map using np.zeros
+
+    Parameters
+    ----------
+
+    obsfit : fit result for one of the pixels, to provide the feature names
+
+    shape : shape of the array used to represent the maps
+
+    Returns
+    -------
+
+    maps_dict : dictionary mapping feature names to
+"""
+    maps_dict = {}
+    for component in obsfit:
+        for i in range(len(component.parameters)):
+            key = feature_name(component, i)
+            maps_dict[key] = np.zeros(shape)
+    return maps_dict
+
+
+def feature_name(component, param_index):
+    """Consistent naming scheme for features (= parameter of component)"""
+    return f"{component.name}_{component.param_names[param_index]}"
 
 
 def fit_spaxel(spaxel_info, args):
     """
     Fits a single spaxel, write out to separate files
+
+    Parameters
+    ----------
+    spaxel_info : dictionary where x = pixel x coordinate, y = pixel y coordinate and obsdata dict
+
+    args : the command line arguments
+
+    Returns
+    -------
+    pmodel : PAHFITBase model
+        PAHFIT model
     """
     # get pixel indices (tentative)
     x = spaxel_info["x"]
@@ -44,9 +116,11 @@ def fit_spaxel(spaxel_info, args):
     # later, we should not have a file per pixel, with all features,
     # but a file per feature, with all pixels.
     basename = args.spectrumfile.split(".")[0]
-    output_dir = "basename/"
-    outputname = output_dir + basename + f"_x{x}y{y}"
+    output_dir = Path(".") / basename
+    output_dir.mkdir(exist_ok=True)
+    outputname = str(output_dir / basename) + f"_x{x}y{y}"
     pmodel.save(obsfit, outputname, args.saveoutput)
+    return obsfit
 
 
 def read_cube(cubefile):
@@ -72,6 +146,7 @@ def read_cube(cubefile):
     cube_unit = u.Unit(cube_hdu.header["BUNIT"])
     cube_data = cube_hdu.data
     cube_qty = cube_data * cube_unit
+    cube_2dwcs = WCS(cubefile, naxis=2)
 
     cube_unc_data = fits.getdata(cubefile.replace(".fits", "_unc.fits"))
     cube_unc_qty = cube_unc_data * cube_unit
@@ -93,7 +168,9 @@ def read_cube(cubefile):
     for x, y in product(range(nx), range(ny)):
         obsdata = {"x": cube_wavs, "y": cube_qty[:, y, x], "unc": cube_unc_qty[:, y, x]}
         spaxel_infos.append({"x": x, "y": y, "obsdata": obsdata})
-    return spaxel_infos
+
+    map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
+    return spaxel_infos, map_info
 
 
 if __name__ == "__main__":
