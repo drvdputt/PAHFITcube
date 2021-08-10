@@ -23,7 +23,6 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 from photutils.aperture import SkyRectangularAperture, aperture_photometry
 import reproject
-from collections import namedtuple
 from dataclasses import dataclass
 
 
@@ -134,6 +133,45 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     return w
 
 
+def stitch_long_to_short(rpj_cube_l, rpj_cube_s):
+    """
+    Stitch two cubes together, pixelwise, by scaling the one that is of
+    shorter wavelengths.
+
+    The cubes must have been reprojected onto the same pixel grid.
+
+    Parameters
+    ----------
+    rpj_cube_l : Cube
+        reprojected cube on the long wavelength side
+
+    rpj_cube_s : Cube
+        reprojected cube on the short wavelength side
+
+    Returns
+    -------
+    rpj_cube_s_rescaled : ndarray
+        the data of shorter wavelength cube of the two, for which every
+        pixel has been rescaled to to match rpj_cube_l in the overlaping
+        wavelength region.
+    """
+    lw = rpj_cube_l.wavelength
+    sw = rpj_cube_s.wavelength
+
+    lw_min = min(lw)
+    sw_max = max(sw)
+
+    # sum the data along the wavelength window
+    ldata_sum = np.average(rpj_cube_l.data[lw < sw_max], axis=0)
+    sdata_sum = np.average(rpj_cube_s.data[sw > lw_min], axis=0)
+
+    # 2d array
+    pixel_ratios = ldata_sum / sdata_sum
+
+    # rescale the 3d array pixel-wise
+    return rpj_cube_s.data * pixel_ratios[np.newaxis]
+
+
 def reproject_and_merge_cubes(
     cube_set, center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec, filename=None
 ):
@@ -144,20 +182,30 @@ def reproject_and_merge_cubes(
     output_projection = make_ra_dec_wcs(
         center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
     )
-    output_wavs = np.concatenate([c.wavelength for c in cube_set.all_cubes()]).flatten()
-    nw = len(output_wavs)
+    rpj_cube_set = CubeSet(
+        *[
+            Cube(
+                file_handle=None,
+                data=reproject_cube(c, output_projection, npix_ra, npix_dec),
+                wavelength=c.wavelength,
+                wcs=output_projection,
+            )
+            for c in cube_set.all_cubes()
+        ]
+    )
 
-    ny, nx = npix_dec, npix_ra
-    output_cube_array = np.zeros((nw, ny, nx))
+    # pixel wise stitching: match ll2 to ll1, sl1 to ll1, sl2 to sl1, in that order
+    rpj_cube_set.ll2.data = stitch_long_to_short(rpj_cube_set.ll1, rpj_cube_set.ll2)
+    rpj_cube_set.sl1.data = stitch_long_to_short(rpj_cube_set.ll2, rpj_cube_set.sl1)
+    rpj_cube_set.sl2.data = stitch_long_to_short(rpj_cube_set.sl1, rpj_cube_set.sl2)
 
-    start = 0
-    for c in cube_set.all_cubes():
-        stop = start + len(c.wavelength)
-        output_cube_array[start:stop] = reproject_cube(c, output_projection, ny, nx)
-        start = stop
+    # put the stichted cubes in one big array
+    output_wavs = np.concatenate([c.wavelength for c in rpj_cube_set.all_cubes()])
+    output_cube_array = np.concatenate(
+        [c.data for c in rpj_cube_set.all_cubes()], axis=0
+    )
 
-    # stitching here
-
+    # sort the slices by wavelength
     order = np.argsort(output_wavs)
     output_wavs = output_wavs[order]
     output_cube_array = output_cube_array[order]
