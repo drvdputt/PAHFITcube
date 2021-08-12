@@ -18,19 +18,28 @@ def main():
     # and those set in initialize_parser, so that the single spectrum
     # and the cube case can each have there own arguments, without
     # unnecessary duplication.
+    parser.add_argument("-j", type=int, default=1, help="Number of parallel processes")
     args = parser.parse_args()
     cube_spaxel_infos, map_info = read_cube(args.spectrumfile)
 
-    multiproc = False
-    if multiproc:
-        with Pool(7) as p:
+    num_fits = len(cube_spaxel_infos)
+    if args.j > 1:
+        with Pool(args.j) as p:
             # do it like this as long as memory for all the pmodels is not
             # an issue. If it becomes an issue, look at parallel iterators
-            obsfits = p.starmap(
-                fit_spaxel,
-                [(cube_spaxel_infos[i], args) for i in range(len(cube_spaxel_infos))],
-                1,
+            # obsfits = p.starmap(
+            #     fit_spaxel,
+            #     [(cube_spaxel_infos[i], args) for i in range(len(cube_spaxel_infos))],
+            #     1,
+            # )
+            parallel_iterator = p.imap(
+                fit_spaxel_wrapper,
+                ((cube_spaxel_infos[i], args) for i in range(num_fits)),
             )
+            obsfits = []
+            for i, obsfit in enumerate(parallel_iterator):
+                obsfits.append(obsfit)
+                print(f"Finished fit {i}/{num_fits}")
     else:
         obsfits = [fit_spaxel(s, args) for s in cube_spaxel_infos]
 
@@ -84,6 +93,10 @@ def initialize_maps_dict(obsfit, shape):
 def feature_name(component, param_index):
     """Consistent naming scheme for features (= parameter of component)"""
     return f"{component.name}_{component.param_names[param_index]}"
+
+
+def fit_spaxel_wrapper(x):
+    return fit_spaxel(x[0], x[1])
 
 
 def fit_spaxel(spaxel_info, args):
