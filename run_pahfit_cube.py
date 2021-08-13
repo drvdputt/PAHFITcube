@@ -5,7 +5,7 @@ from itertools import product
 from astropy.io import fits
 from astropy.table import Table
 from astropy import units as u
-from multiprocessing import Pool
+from multiprocess import Pool
 from pathlib import Path
 from astropy.wcs import WCS
 import numpy as np
