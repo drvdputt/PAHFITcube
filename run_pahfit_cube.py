@@ -9,19 +9,26 @@ from multiprocess import Pool
 from pathlib import Path
 from astropy.wcs import WCS
 import numpy as np
+import matplotlib as mpl
+from matplotlib import pyplot as plt
 
 
 def main():
     parser = initialize_parser()
-    print("Hack warning: spectrumfile needs to be a cube for this script.")
     # Need to figure out the common parts between this set of arguments
     # and those set in initialize_parser, so that the single spectrum
     # and the cube case can each have there own arguments, without
     # unnecessary duplication.
     parser.add_argument("-j", type=int, default=1, help="Number of parallel processes")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Load pmodel for pixel from file if present",
+    )
     args = parser.parse_args()
     cube_spaxel_infos, map_info = read_cube(args.spectrumfile)
 
+    # run everything
     num_fits = len(cube_spaxel_infos)
     if args.j > 1:
         with Pool(args.j) as p:
@@ -36,19 +43,19 @@ def main():
                 fit_spaxel_wrapper,
                 ((cube_spaxel_infos[i], args) for i in range(num_fits)),
             )
-            obsfits = []
-            for i, obsfit in enumerate(parallel_iterator):
-                obsfits.append(obsfit)
+            pmodels = []
+            for i, pmodel in enumerate(parallel_iterator):
+                pmodels.append(pmodel)
                 print(f"Finished fit {i}/{num_fits}")
     else:
-        obsfits = [fit_spaxel(s, args) for s in cube_spaxel_infos]
+        pmodels = [fit_spaxel(s, args) for s in cube_spaxel_infos]
 
     # make sure the spaxel infos and the obsfits are in the same order:
-    maps_dict = initialize_maps_dict(obsfits[0], shape=(map_info["ny"], map_info["nx"]))
-    for spaxel_info, obsfit in zip(cube_spaxel_infos, obsfits):
+    maps_dict = initialize_maps_dict(pmodels[0], shape=(map_info["ny"], map_info["nx"]))
+    for spaxel_info, pmodel in zip(cube_spaxel_infos, pmodels):
         x = spaxel_info["x"]
         y = spaxel_info["y"]
-        for component in obsfit:
+        for component in pmodel.model:
             for i, value in enumerate(component.parameters):
                 key = feature_name(component, i)
                 maps_dict[key][y, x] = value
@@ -61,19 +68,57 @@ def main():
         new_hdul.append(hdu)
 
     basename = args.spectrumfile.split(".")[0]
-    output_dir = Path(".") / basename
+    output_dir = Path(".") / (basename + "_output_per_pixel")
     output_dir.mkdir(exist_ok=True)
-    filename = str(output_dir / basename) + "_parameter_maps.fits"
-    new_hdul.writeto(filename, overwrite=True)
+    outputname = str(output_dir / basename) + "_parameter_maps.fits"
+    new_hdul.writeto(outputname, overwrite=True)
+
+    # plot everything
+    fontsize = 18
+    font = {"size": fontsize}
+    mpl.rc("font", **font)
+    mpl.rc("lines", linewidth=2)
+    mpl.rc("axes", linewidth=2)
+    mpl.rc("xtick.major", size=5, width=1)
+    mpl.rc("ytick.major", size=5, width=1)
+    mpl.rc("xtick.minor", size=3, width=1)
+    mpl.rc("ytick.minor", size=3, width=1)
+    for spaxel_info, pmodel in zip(cube_spaxel_infos, pmodels):
+        obsdata = spaxel_info["obsdata"]
+        obsfit = pmodel.model
+        x = spaxel_info["x"]
+        y = spaxel_info["y"]
+
+        fig, axs = plt.subplots(
+            ncols=1,
+            nrows=2,
+            figsize=(15, 10),
+            gridspec_kw={"height_ratios": [3, 1]},
+            sharex=True,
+        )
+
+        pmodel.plot(
+            axs,
+            obsdata["x"],
+            obsdata["y"],
+            obsdata["unc"],
+            obsfit,
+            scalefac_resid=args.scalefac_resid,
+        )
+
+        # use the whitespace better
+        fig.subplots_adjust(hspace=0)
+        outputname = str(output_dir / basename) + f"_x{x}y{y}"
+        fig.savefig("{}.{}".format(outputname, args.savefig))
 
 
-def initialize_maps_dict(obsfit, shape):
+def initialize_maps_dict(pmodel, shape):
     """Initialize every output map using np.zeros
 
     Parameters
     ----------
 
-    obsfit : fit result for one of the pixels, to provide the feature names
+    pmodel : fit result for one of the pixels, to provide the feature names
 
     shape : shape of the array used to represent the maps
 
@@ -83,7 +128,7 @@ def initialize_maps_dict(obsfit, shape):
     maps_dict : dictionary mapping feature names to
 """
     maps_dict = {}
-    for component in obsfit:
+    for component in pmodel.model:
         for i in range(len(component.parameters)):
             key = feature_name(component, i)
             maps_dict[key] = np.zeros(shape)
@@ -96,7 +141,7 @@ def feature_name(component, param_index):
 
 
 def fit_spaxel_wrapper(x):
-    return fit_spaxel(x[0], x[1])
+    return fit_spaxel(*x)
 
 
 def fit_spaxel(spaxel_info, args):
@@ -114,26 +159,32 @@ def fit_spaxel(spaxel_info, args):
     pmodel : PAHFITBase model
         PAHFIT model
     """
-    # get pixel indices (tentative)
+    # get pixel indices and observed data
     x = spaxel_info["x"]
     y = spaxel_info["y"]
-    # get obsdata for this spaxel
     obsdata = spaxel_info["obsdata"]
-    # setup the base model. Later, fitting could be optimized by being
-    # smarter, and using information about neighbouring spaxels instead
-    # of starting from scratch each time.
-    pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
-    obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
 
-    # for now, we will save the results to separate files. But
-    # later, we should not have a file per pixel, with all features,
-    # but a file per feature, with all pixels.
+    # determine file name for this pixel
     basename = args.spectrumfile.split(".")[0]
-    output_dir = Path(".") / basename
+    output_dir = Path(".") / (basename + "_output_per_pixel")
     output_dir.mkdir(exist_ok=True)
-    outputname = str(output_dir / basename) + f"_x{x}y{y}"
-    pmodel.save(obsfit, outputname, args.saveoutput)
-    return obsfit
+    outputformat = str(output_dir / (basename + f"_x{x}y{y}"))
+    outputpath_full = output_dir / (basename + f"_x{x}y{y}_output." + args.saveoutput)
+
+    if args.resume and outputpath_full.exists():
+        # load model from previous (possibly partially completed) run
+        pmodel = initialize_model(str(outputpath_full), obsdata, estimate_start=False)
+    else:
+        # setup the base model. Later, fitting could be optimized by being
+        # smarter, and using information about neighbouring spaxels instead
+        # of starting from scratch each time.
+        pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
+        obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
+        # Save each pixel to separate file. Useful for "--continue" option.
+
+        pmodel.save(obsfit, outputformat, args.saveoutput)
+
+    return pmodel
 
 
 def read_cube(cubefile):
