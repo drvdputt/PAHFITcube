@@ -58,7 +58,10 @@ def main():
         for component in pmodel.model:
             for i, value in enumerate(component.parameters):
                 key = feature_name(component, i)
-                maps_dict[key][y, x] = value
+                # initialize_maps_dict has already chosen which
+                # parameters we are going to write out
+                if key in maps_dict:
+                    maps_dict[key][y, x] = value
 
     # save the maps
     header = map_info["wcs"].to_header()
@@ -108,7 +111,7 @@ def main():
             )
         except ValueError as error:
             print(error)
-            print("Skipping plot due to the above error")
+            print(f"Skipping plot x{x}y{y} due to the above error")
             continue
 
         # use the whitespace better
@@ -134,15 +137,24 @@ def initialize_maps_dict(pmodel, shape):
 """
     maps_dict = {}
     for component in pmodel.model:
-        for i in range(len(component.parameters)):
-            key = feature_name(component, i)
-            maps_dict[key] = np.zeros(shape)
+        for i, name in enumerate(component.param_names):
+            # only write out non-fixed parameters
+            if not component.fixed[name]:
+                key = feature_name(component, i)
+                maps_dict[key] = np.zeros(shape)
+
     return maps_dict
 
 
 def feature_name(component, param_index):
     """Consistent naming scheme for features (= parameter of component)"""
-    return f"{component.name}_{component.param_names[param_index]}"
+    # key will be <component name>_<constant names and values>_<fitted parameter name>
+    key = component.name
+    # for value, name in zip(component.parameters, component.param_names):
+    #     if component.fixed[name]:
+    #         key += f"_{name}{value}"
+    key += f"_{component.param_names[param_index]}"
+    return key
 
 
 def fit_spaxel_wrapper(x):
