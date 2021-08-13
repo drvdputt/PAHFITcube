@@ -97,14 +97,19 @@ def main():
             sharex=True,
         )
 
-        pmodel.plot(
-            axs,
-            obsdata["x"],
-            obsdata["y"],
-            obsdata["unc"],
-            obsfit,
-            scalefac_resid=args.scalefac_resid,
-        )
+        try:
+            pmodel.plot(
+                axs,
+                obsdata["x"],
+                obsdata["y"],
+                obsdata["unc"],
+                obsfit,
+                scalefac_resid=args.scalefac_resid,
+            )
+        except ValueError as error:
+            print(error)
+            print("Skipping plot due to the above error")
+            continue
 
         # use the whitespace better
         fig.subplots_adjust(hspace=0)
