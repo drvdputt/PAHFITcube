@@ -23,6 +23,7 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 from photutils.aperture import SkyRectangularAperture, aperture_photometry
 import reproject
+from itertools import product
 from dataclasses import dataclass
 
 
@@ -97,6 +98,7 @@ def get_SAGE_cubes(target, uncertainty=False):
 def quicklook_cubes(cube_set, apertures=None):
     """Display the 4 cubes and a set of apertures in a 2x2 grid."""
     fig = plt.gcf()
+    titles = ["LL1", "LL2", "SL1", "SL2"]
     for i, cube in enumerate(cube_set.all_cubes()):
         ax = fig.add_subplot(2, 2, i + 1, projection=cube.wcs)
         ax.imshow(cube.data[-1])
@@ -104,8 +106,16 @@ def quicklook_cubes(cube_set, apertures=None):
         ax.coords[0].set_format_unit(u.degree, decimal=True)
         ax.coords[1].set_format_unit(u.degree, decimal=True)
         if apertures is not None:
-            apertures.to_pixel(cube.wcs).plot(axes=ax, color="r")
+            apertures.to_pixel(cube.wcs).plot(axes=ax, color="r", alpha=0.5)
+        ax.set_title(titles[i])
+    return fig
 
+def indicate_overlap(ax):
+    """Plot axvspan on ax to indicate each overlap area."""
+
+    ax.axvspan(7.5, 7.6, color='k', alpha=0.1)
+    ax.axvspan(14.2, 14.8, color='k', alpha=0.1)
+    ax.axvspan(20.4, 21.1, color='k', alpha=0.1)
 
 # the wcs we want our final map to have
 def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
@@ -178,7 +188,13 @@ def reproject_and_merge_cubes(
     """
     Reproject all four cubes onto pixel grid wcs, and merge the result.
 
-    Result is sorted by wavelength"""
+    Result is sorted by wavelength.
+    
+    """
+    if not ".fits" in filename:
+        print("filename should end in .fits")
+        raise
+
     output_projection = make_ra_dec_wcs(
         center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
     )
@@ -194,46 +210,18 @@ def reproject_and_merge_cubes(
         ]
     )
 
+    # write out cube before stitching
+    path = Path(filename)
+    merge_and_write_cubes(
+        rpj_cube_set.all_cubes(),
+        path.parent / path.name.replace(".fits", "_nostitch.fits"),
+    )
+
     # pixel wise stitching: match ll2 to ll1, sl1 to ll1, sl2 to sl1, in that order
     rpj_cube_set.ll2.data = stitch_long_to_short(rpj_cube_set.ll1, rpj_cube_set.ll2)
     rpj_cube_set.sl1.data = stitch_long_to_short(rpj_cube_set.ll2, rpj_cube_set.sl1)
     rpj_cube_set.sl2.data = stitch_long_to_short(rpj_cube_set.sl1, rpj_cube_set.sl2)
-
-    # put the stichted cubes in one big array
-    output_wavs = np.concatenate([c.wavelength for c in rpj_cube_set.all_cubes()])
-    output_cube_array = np.concatenate(
-        [c.data for c in rpj_cube_set.all_cubes()], axis=0
-    )
-
-    # sort the slices by wavelength
-    order = np.argsort(output_wavs)
-    output_wavs = output_wavs[order]
-    output_cube_array = output_cube_array[order]
-
-    if filename is not None:
-        # multi extension (wav list and cube)
-        new_hdul = fits.HDUList()
-        # cube as primary hdu
-        header = output_projection.to_header()
-        header["PC3_3"] = 1
-        header["CRPIX3"] = 1
-        header["CRVAL3"] = 1
-        header["CTYPE3"] = "WAVE-TAB"
-        header["CUNIT3"] = "um"
-        header["PS3_0"] = "WCS-TAB"
-        header["PS3_1"] = "WAVELENGTH"
-        header["BUNIT"] = "MJy/sr"
-        new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
-        # wavs as bintable hdu
-        wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="D")
-        wavhdu = fits.BinTableHDU.from_columns([wav_col])
-        wavhdu.header["EXTNAME"] = "WCS-TAB"
-        wavhdu.header["TUNIT1"] = "um"
-        new_hdul.append(wavhdu)
-        # write
-        new_hdul.writeto(filename, overwrite=True)
-
-    return output_wavs, output_cube_array
+    merge_and_write_cubes(rpj_cube_set.all_cubes(), path)
 
 
 def reproject_cube(cube, wcs, ny, nx):
@@ -256,6 +244,50 @@ def reproject_cube(cube, wcs, ny, nx):
             shape_out=(ny, nx),
         )
     return output_array
+
+
+def merge_and_write_cubes(cubes, filename):
+    """Merge a set of spectral cubes and write fits file
+
+    They need to be of the same size along the spatial axes. The WCS
+    contained in the first cube will be used.
+
+    Parameters
+    ----------
+    cubes: list of Cube
+
+    """
+    # put the cube data in one big array
+    output_wavs = np.concatenate([c.wavelength for c in cubes])
+    output_cube_array = np.concatenate([c.data for c in cubes], axis=0)
+
+    # sort the slices by wavelength
+    order = np.argsort(output_wavs)
+    output_wavs = output_wavs[order]
+    output_cube_array = output_cube_array[order]
+
+    if filename is not None:
+        # multi extension (wav list and cube)
+        new_hdul = fits.HDUList()
+        # cube as primary hdu
+        header = cubes[0].wcs.to_header()
+        header["PC3_3"] = 1
+        header["CRPIX3"] = 1
+        header["CRVAL3"] = 1
+        header["CTYPE3"] = "WAVE-TAB"
+        header["CUNIT3"] = "um"
+        header["PS3_0"] = "WCS-TAB"
+        header["PS3_1"] = "WAVELENGTH"
+        header["BUNIT"] = "MJy/sr"
+        new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
+        # wavs as bintable hdu
+        wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="D")
+        wavhdu = fits.BinTableHDU.from_columns([wav_col])
+        wavhdu.header["EXTNAME"] = "WCS-TAB"
+        wavhdu.header["TUNIT1"] = "um"
+        new_hdul.append(wavhdu)
+        # write
+        new_hdul.writeto(filename, overwrite=True)
 
 
 def make_square_aperture_grid(
@@ -305,7 +337,33 @@ def extract_spectra(cube_dicts, sky_apertures):
     return output
 
 
-##################################OBSOLETE######################################
+################################################################################
+
+
+def plot_cube(filename, name_in_title):
+    """Plots some slices and SEDs in a cube"""
+    with fits.open(filename) as hdulist:
+        wavs = hdulist["WCS-TAB"].data["WAVELENGTH"]
+        cube = hdulist["PRIMARY"].data
+
+        plt.figure()
+        w = cube.shape[0] // 2
+        wval = wavs[w]
+        plt.imshow(cube[w])
+        plt.title(f"{name_in_title} at {wval:.2f} micron")
+
+        plt.figure()
+        nw, ny, nx = cube.shape
+        pixel_x_choice = (nx // 2, nx // 4, nx // 2 + nx // 4)
+        pixel_y_choice = (ny // 2, ny // 4, ny // 2 + ny // 4)
+        for (x, y) in product(pixel_x_choice, pixel_y_choice):
+            plt.plot(wavs, cube[:, y, x])
+
+        indicate_overlap(plt.gca())
+
+        plt.xlabel("wavelength (micron)")
+        plt.ylabel("pixel (MJy / sr)")
+        plt.title(f"A few SEDs from {name_in_title}")
 
 
 def main():
@@ -320,11 +378,11 @@ def main():
     # print(apr)
     target = "hii1_hii8"
     cube_dicts = get_SAGE_cubes(target)
-    quicklook_cubes(cube_dicts, apr)
-    plt.title("A slice from each cube and apertures used")
+    fig = quicklook_cubes(cube_dicts, apr)
+    fig.suptitle("Reprojection grid")
 
     output_fn = "reprojected.fits"
-    wavs, cube = reproject_and_merge_cubes(
+    reproject_and_merge_cubes(
         cube_dicts,
         ra_center,
         dec_center,
@@ -337,7 +395,7 @@ def main():
     # do the same for the uncertainties
     cube_unc_dicts = get_SAGE_cubes(target, uncertainty=True)
     output_fn_unc = output_fn.replace(".fits", "_unc.fits")
-    wavs_unc, cube_unc = reproject_and_merge_cubes(
+    reproject_and_merge_cubes(
         cube_unc_dicts,
         ra_center,
         dec_center,
@@ -347,14 +405,10 @@ def main():
         filename=output_fn_unc,
     )
 
-    plt.figure()
-    w = cube.shape[0] // 2
-    wval = wavs[w]
-    plt.imshow(cube[w])
-    plt.title(f"Final cube at {wval} micron")
-    plt.figure()
-    plt.plot(wavs, cube.reshape(cube.shape[0], cube.shape[1] * cube.shape[2]))
-    plt.title("SED for each pixel of final cube")
+    # plot a preview of the merged cube
+    plot_cube(output_fn, "stitched cube")
+    plot_cube(output_fn.replace(".fits", "_nostitch.fits"), "not stitched")
+
     plt.show()
 
 
