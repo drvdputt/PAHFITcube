@@ -56,7 +56,7 @@ script. The reprojected and merged data cube can be used as input, and the Spitz
 pack should be used until new calibration settings are developed. Running the script can be done
 as follows
 
-    ipython run_pahfit_cube.py reprojected.fits scipack_ExGal_SpitzerIRSSLLL.ipac --fit_maxiter 50
+    python run_pahfit_cube.py reprojected.fits scipack_ExGal_SpitzerIRSSLLL.ipac --fit_maxiter 50
 
 For debugging the script, it is best to set `--fit_maxiter` to a low number, so that everything
 goes faster.
