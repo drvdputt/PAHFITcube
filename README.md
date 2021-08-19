@@ -75,4 +75,4 @@ already present. It loads the fit results for those pixels from the output files
 
 ### Multiprocessing
 The `-j` option controls the number of processes. Looking at the implementation, one can see
-that parallelizing the fitting was rather trivial.
+that parallelizing the fitting is relatively simple.
