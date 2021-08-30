@@ -324,6 +324,8 @@ def plot_cube(filename, name_in_title):
         wval = wavs[w]
         plt.imshow(cube[w])
         plt.title(f"{name_in_title} at {wval:.2f} micron")
+        plt.xlabel("RA")
+        plt.ylabel("DEC")
 
         plt.figure()
         nw, ny, nx = cube.shape
