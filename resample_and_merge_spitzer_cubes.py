@@ -21,7 +21,7 @@ from astropy.wcs import WCS
 from astropy import units as u
 from pathlib import Path
 from matplotlib import pyplot as plt
-from photutils.aperture import SkyRectangularAperture, aperture_photometry
+from photutils.aperture import SkyRectangularAperture
 import reproject
 from itertools import product
 from dataclasses import dataclass
@@ -101,7 +101,7 @@ def quicklook_cubes(cube_set, apertures=None):
     titles = ["LL1", "LL2", "SL1", "SL2"]
     for i, cube in enumerate(cube_set.all_cubes()):
         ax = fig.add_subplot(2, 2, i + 1, projection=cube.wcs)
-        ax.imshow(cube.data[-1])
+        ax.imshow(cube.data[-1], origin="lower")
         ax.grid()
         ax.coords[0].set_format_unit(u.degree, decimal=True)
         ax.coords[1].set_format_unit(u.degree, decimal=True)
@@ -113,7 +113,6 @@ def quicklook_cubes(cube_set, apertures=None):
 
 def indicate_overlap(ax):
     """Plot axvspan on ax to indicate each overlap area."""
-
     ax.axvspan(7.5, 7.6, color="k", alpha=0.1)
     ax.axvspan(14.2, 14.8, color="k", alpha=0.1)
     ax.axvspan(20.4, 21.1, color="k", alpha=0.1)
@@ -204,7 +203,7 @@ def reproject_and_merge_cubes(
         *[
             Cube(
                 file_handle=None,
-                data=reproject_cube(c, output_projection, npix_ra, npix_dec),
+                data=reproject_cube(c, output_projection, npix_dec, npix_ra),
                 wavelength=c.wavelength,
                 wcs=output_projection,
             )
@@ -228,7 +227,7 @@ def reproject_and_merge_cubes(
 
 def reproject_cube(cube, wcs, ny, nx):
     """
-    Reproject every slice of cube onto wcs, ny, nx.
+    Reproject every slice of cube onto wcs using ny, nx grid
 
     Returns
     -------
@@ -318,14 +317,16 @@ def plot_cube(filename, name_in_title):
     with fits.open(filename) as hdulist:
         wavs = hdulist["WCS-TAB"].data["WAVELENGTH"]
         cube = hdulist["PRIMARY"].data
+        wcs = WCS(filename, naxis=2)
 
-        plt.figure()
+        fig = plt.figure()
+        ax = fig.add_subplot(projection=wcs)
         w = cube.shape[0] // 2
         wval = wavs[w]
-        plt.imshow(cube[w])
-        plt.title(f"{name_in_title} at {wval:.2f} micron")
-        plt.xlabel("RA")
-        plt.ylabel("DEC")
+        ax.imshow(cube[w], origin="lower")
+        ax.set_title(f"{name_in_title} at {wval:.2f} micron")
+        ax.set_xlabel("RA")
+        ax.set_ylabel("DEC")
 
         plt.figure()
         nw, ny, nx = cube.shape
@@ -344,12 +345,10 @@ def plot_cube(filename, name_in_title):
 def main():
     ra_center = 73.03
     dec_center = -66.923
-    num_ra_pix = 15
-    num_dec_pix = 10
+    npix_ra = 15
+    npix_dec = 10
     delt = 0.001
-    apr = make_square_aperture_grid(
-        ra_center, dec_center, delt, num_ra_pix, num_dec_pix
-    )
+    apr = make_square_aperture_grid(ra_center, dec_center, delt, npix_ra, npix_dec)
     # print(apr)
     target = "hii1_hii8"
     cube_dicts = get_SAGE_cubes(target)
@@ -358,13 +357,7 @@ def main():
 
     output_fn = "reprojected.fits"
     reproject_and_merge_cubes(
-        cube_dicts,
-        ra_center,
-        dec_center,
-        delt,
-        num_ra_pix,
-        num_dec_pix,
-        filename=output_fn,
+        cube_dicts, ra_center, dec_center, delt, npix_ra, npix_dec, filename=output_fn,
     )
 
     # do the same for the uncertainties
@@ -375,8 +368,8 @@ def main():
         ra_center,
         dec_center,
         delt,
-        num_ra_pix,
-        num_dec_pix,
+        npix_ra,
+        npix_dec,
         filename=output_fn_unc,
     )
 
