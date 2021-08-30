@@ -5,7 +5,7 @@ For now, it will only work for the cubes of the SAGE-Spec program.
 Given a set of data cubes, a set of spectra is extracted by performing
 aperture photometry on each slice. The apertures used are rectangular
 and adjacent in the pixel space of the map we are trying to create. The
-axes of the map align with RA,DEC by construction. 
+axes of the map align with RA,DEC by construction.
 
 We use a manually created WCS to turn the pixel grid into a coordinate
 grid with equal angular separation along each axis. The coordinates are
@@ -110,12 +110,14 @@ def quicklook_cubes(cube_set, apertures=None):
         ax.set_title(titles[i])
     return fig
 
+
 def indicate_overlap(ax):
     """Plot axvspan on ax to indicate each overlap area."""
 
-    ax.axvspan(7.5, 7.6, color='k', alpha=0.1)
-    ax.axvspan(14.2, 14.8, color='k', alpha=0.1)
-    ax.axvspan(20.4, 21.1, color='k', alpha=0.1)
+    ax.axvspan(7.5, 7.6, color="k", alpha=0.1)
+    ax.axvspan(14.2, 14.8, color="k", alpha=0.1)
+    ax.axvspan(20.4, 21.1, color="k", alpha=0.1)
+
 
 # the wcs we want our final map to have
 def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
@@ -189,7 +191,7 @@ def reproject_and_merge_cubes(
     Reproject all four cubes onto pixel grid wcs, and merge the result.
 
     Result is sorted by wavelength.
-    
+
     """
     if not ".fits" in filename:
         print("filename should end in .fits")
@@ -309,35 +311,6 @@ def make_square_aperture_grid(
     positions = w.pixel_to_world(x, y)
     size = pix_angle_delta * u.degree
     return SkyRectangularAperture(positions, size, size)
-
-
-##################################OBSOLETE######################################
-def extract_spectra(cube_dicts, sky_apertures):
-    wavtables = [d["wavelength"] for d in cube_dicts]
-    cubes = [d["cube"] for d in cube_dicts]
-    wcses = [d["wcs"] for d in cube_dicts]
-
-    # prepare output table. output will be table with wavelength in
-    # first column, and the flux for each aperture in the following
-    # columns
-    num_wavs = sum((len(w) for w in wavtables))
-    num_spectra = len(sky_apertures)
-    output = np.zeros((num_wavs, 1 + num_spectra))
-
-    # perform aperture photometry on every slice of every cube
-    row_counter = 0
-    for i in range(len(cubes)):
-        for w in range(len(wavtables[i])):
-            output[row_counter, 0] = wavtables[i][w]
-            image = cubes[i].data[w]
-            photometry_result = aperture_photometry(image, sky_apertures, wcs=wcses[i])
-            output[row_counter, 1:] = photometry_result["aperture_sum"]
-            row_counter += 1
-
-    return output
-
-
-################################################################################
 
 
 def plot_cube(filename, name_in_title):
