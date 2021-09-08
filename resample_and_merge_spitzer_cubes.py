@@ -264,10 +264,19 @@ def merge_and_write_cubes(cubes, filename):
     output_cube_array = output_cube_array[order]
 
     if filename is not None:
+        path = Path(filename)
         # multi extension (wav list and cube)
         new_hdul = fits.HDUList()
         # cube as primary hdu
         header = cubes[0].wcs.to_header()
+        header["BUNIT"] = "MJy/sr"
+        # write out slice as test
+        test_hdul = fits.HDUList()
+        test_hdul.append(fits.PrimaryHDU(data=output_cube_array[0], header=header))
+        test_hdul.writeto(path.parent / ("slice_test_" + path.name), overwrite=True)
+
+        # manually set these cards, in an attempt to make the wavelength
+        # slider work properly in DS9
         header["PC3_3"] = 1
         header["CRPIX3"] = 1
         header["CRVAL3"] = 1
@@ -275,16 +284,23 @@ def merge_and_write_cubes(cubes, filename):
         header["CUNIT3"] = "um"
         header["PS3_0"] = "WCS-TAB"
         header["PS3_1"] = "WAVELENGTH"
-        header["BUNIT"] = "MJy/sr"
+
         new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
-        # wavs as bintable hdu
-        wav_col = fits.Column(name="WAVELENGTH", array=output_wavs, format="D")
-        wavhdu = fits.BinTableHDU.from_columns([wav_col])
+        # wavs as bintable hdu. Try to recreate the format of the
+        # Spitzer cubes.
+        weird_output_format = np.zeros(
+            shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(output_wavs), 1))]
+        )
+        for i in range(len(output_wavs)):
+            weird_output_format["WAVELENGTH"][0][i][0] = output_wavs[i]
+        wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
         wavhdu.header["EXTNAME"] = "WCS-TAB"
         wavhdu.header["TUNIT1"] = "um"
+        wavhdu.header["TDIM1"] = str((1, len(output_wavs)))
+
         new_hdul.append(wavhdu)
         # write
-        new_hdul.writeto(filename, overwrite=True)
+        new_hdul.writeto(path, overwrite=True)
 
 
 def make_square_aperture_grid(
@@ -310,8 +326,8 @@ def make_square_aperture_grid(
 
 def plot_cube(filename, name_in_title):
     """Plots some slices and SEDs in a cube"""
+    wavs = Table.read(filename)["WAVELENGTH"][0].flatten()
     with fits.open(filename) as hdulist:
-        wavs = hdulist["WCS-TAB"].data["WAVELENGTH"]
         cube = hdulist["PRIMARY"].data
         wcs = WCS(filename, naxis=2)
 

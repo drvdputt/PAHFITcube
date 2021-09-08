@@ -233,13 +233,15 @@ def read_cube(cubefile):
     cube_unc_qty = cube_unc_data * cube_unit
 
     wavtable = Table.read(cubefile)
-    cube_wavs = wavtable["WAVELENGTH"].quantity
+    # The wavelengths can be stored in a weird format sometimes.
+    # Flattening should make it consistent.
+    cube_wavs = wavtable["WAVELENGTH"].quantity.flatten()
 
     if cube_data.shape != cube_unc_data.shape:
         print("Uncertainties cube has wrong shape!")
         exit()
 
-    if len(wavtable) != cube_data.shape[0]:
+    if len(cube_wavs) != cube_data.shape[0]:
         print("Wavelength table and cube are not compatible")
         exit()
 
