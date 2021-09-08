@@ -1,17 +1,13 @@
-"""Prototype for cube wrapper script around PAHFIT.
+"""Take multiple spectral cubes, and merged them into a format suitable
+for PAHFIT-cube.
 
-For now, it will only work for the cubes of the SAGE-Spec program.
+For now, it will only work for the cubes of the SAGE-Spec program: LL1,
+LL2, SL1, SL2. Given these four data cubes, a merged cube is created by
+reprojecting each slice onto the same WCS, and merging the reprojected
+slices. A WCS for the output is created manually.
 
-Given a set of data cubes, a set of spectra is extracted by performing
-aperture photometry on each slice. The apertures used are rectangular
-and adjacent in the pixel space of the map we are trying to create. The
-axes of the map align with RA,DEC by construction.
-
-We use a manually created WCS to turn the pixel grid into a coordinate
-grid with equal angular separation along each axis. The coordinates are
-used to create a set sky-apertures, which can then be used to perform
-aperture photometry on the cube slices, given the right WCS for each
-cube.
+A pixel-by-pixel spectral order stitching step is performed, based on
+the average value in the region of wavelength overlap.
 
 """
 import numpy as np
