@@ -22,6 +22,9 @@ import reproject
 from itertools import product
 from dataclasses import dataclass
 
+# local imports
+import wcshacks
+
 
 @dataclass
 class Cube:
@@ -114,32 +117,6 @@ def indicate_overlap(ax):
     ax.axvspan(20.4, 21.1, color="k", alpha=0.1)
 
 
-# the wcs we want our final map to have
-def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
-    """Make simple WCS where X and Y are aligned with RA and DEC, respectively.
-
-    center_ra, center_dec: determines crval
-
-    pix_angle_delta: physical distance between pixels, in decimal degrees
-
-    npix_ra, npix_dec: number of pixels along each axis. Is needed to
-    make sure that (center_ra, center_dec) corresponds to the middle of
-    the image. The physical image size will be pix_angle_delta * npix.
-
-    """
-    w = WCS(naxis=2)
-    # center of each pixel = 1, 2, 3, ...
-    # 3 pixels --> center is 2
-    # 4 pixels --> center is 2.5 (border between 2 and 3)
-    center_x = npix_ra / 2 + 0.5
-    center_y = npix_dec / 2 + 0.5
-    w.wcs.crpix = [center_x, center_y]
-    w.wcs.crval = [center_ra, center_dec]
-    w.wcs.cdelt = [-pix_angle_delta, pix_angle_delta]
-    w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    return w
-
-
 def stitch_long_to_short(rpj_cube_l, rpj_cube_s):
     """
     Stitch two cubes together, pixelwise, by scaling the one that is of
@@ -192,7 +169,7 @@ def reproject_and_merge_cubes(
         print("filename should end in .fits")
         raise
 
-    output_projection = make_ra_dec_wcs(
+    output_projection = wcshacks.make_ra_dec_wcs(
         center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
     )
     rpj_cube_set = CubeSet(
@@ -318,7 +295,7 @@ def make_square_aperture_grid(
     x = X.flatten()
     y = Y.flatten()
 
-    w = make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec)
+    w = wcshacks.make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec)
     positions = w.pixel_to_world(x, y)
     size = pix_angle_delta * u.degree
     return SkyRectangularAperture(positions, size, size)
