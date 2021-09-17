@@ -176,7 +176,9 @@ def reproject_and_merge_cubes(
         *[
             Cube(
                 file_handle=None,
-                data=reproject_cube(c, output_projection, npix_dec, npix_ra),
+                data=reproject_cube_data(
+                    c.data, c.wcs, output_projection, npix_dec, npix_ra
+                ),
                 wavelength=c.wavelength,
                 wcs=output_projection,
             )
@@ -198,7 +200,7 @@ def reproject_and_merge_cubes(
     merge_and_write_cubes(rpj_cube_set.all_cubes(), path)
 
 
-def reproject_cube(cube, wcs, ny, nx):
+def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
     """
     Reproject every slice of cube onto wcs using ny, nx grid
 
@@ -206,14 +208,11 @@ def reproject_cube(cube, wcs, ny, nx):
     -------
     output_array: np.ndarray indexed on wavelength, y, x
     """
-    num_wavs = len(cube.wavelength)
-    input_array = cube.data
-    input_wcs = cube.wcs
-
+    num_wavs = cube_data.shape[0]
     output_array = np.zeros((num_wavs, ny, nx))
     for w in range(num_wavs):
         output_array[w], footprint = reproject.reproject_adaptive(
-            input_data=(input_array[w], input_wcs),
+            input_data=(cube_data[w], cube_wcs),
             output_projection=wcs,
             shape_out=(ny, nx),
         )
@@ -295,7 +294,9 @@ def make_square_aperture_grid(
     x = X.flatten()
     y = Y.flatten()
 
-    w = wcshacks.make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec)
+    w = wcshacks.make_ra_dec_wcs(
+        center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
+    )
     positions = w.pixel_to_world(x, y)
     size = pix_angle_delta * u.degree
     return SkyRectangularAperture(positions, size, size)
@@ -346,7 +347,13 @@ def main():
 
     output_fn = "reprojected.fits"
     reproject_and_merge_cubes(
-        cube_dicts, ra_center, dec_center, delt, npix_ra, npix_dec, filename=output_fn,
+        cube_dicts,
+        ra_center,
+        dec_center,
+        delt,
+        npix_ra,
+        npix_dec,
+        filename=output_fn,
     )
 
     # do the same for the uncertainties
@@ -369,4 +376,5 @@ def main():
     plt.show()
 
 
-main()
+if __name__ == "__main__":
+    main()
