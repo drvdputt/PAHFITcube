@@ -17,7 +17,6 @@ from astropy.wcs import WCS
 from astropy import units as u
 from pathlib import Path
 from matplotlib import pyplot as plt
-from photutils.aperture import SkyRectangularAperture
 from dataclasses import dataclass
 from plotting import plot_cube
 
@@ -224,36 +223,15 @@ def merge_and_write_cubes(cubes, filename):
         wcshacks.write_merged_cube(filename, output_cube_array, output_wavs, newwcs)
 
 
-def make_square_aperture_grid(
-    center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
-):
-    """
-    Create sky apertures representing pixels of RA-DEC aligned map.
-
-    Use sky apertures immediately (instead of starting with pixel
-    apertures and then converting), to make picking the right size
-    easier.
-    """
-    # all xy pairs
-    X, Y = np.mgrid[:npix_ra, :npix_dec]
-    x = X.flatten()
-    y = Y.flatten()
-
-    w = wcshacks.make_ra_dec_wcs(
-        center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
-    )
-    positions = w.pixel_to_world(x, y)
-    size = pix_angle_delta * u.degree
-    return SkyRectangularAperture(positions, size, size)
-
-
 def main():
     ra_center = 73.03
     dec_center = -66.923
     npix_ra = 15
     npix_dec = 10
     delt = 0.001
-    apr = make_square_aperture_grid(ra_center, dec_center, delt, npix_ra, npix_dec)
+    apr = wcshacks.make_square_aperture_grid(
+        ra_center, dec_center, delt, npix_ra, npix_dec
+    )
     # print(apr)
     target = "hii1_hii8"
     cube_dicts = get_SAGE_cubes(target)

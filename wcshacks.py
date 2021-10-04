@@ -4,6 +4,8 @@ from pathlib import Path
 from astropy.io import fits
 from astropy.table import Table
 import numpy as np
+import astropy.units as u
+from photutils import SkyRectangularAperture
 
 
 def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
@@ -29,6 +31,27 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     w.wcs.cdelt = [-pix_angle_delta, pix_angle_delta]
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     return w
+
+
+def make_square_aperture_grid(
+    center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec
+):
+    """
+    Create sky apertures representing pixels of RA-DEC aligned map.
+
+    Use sky apertures immediately (instead of starting with pixel
+    apertures and then converting), to make picking the right size
+    easier.
+    """
+    # all xy pairs
+    X, Y = np.mgrid[:npix_ra, :npix_dec]
+    x = X.flatten()
+    y = Y.flatten()
+
+    w = make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec)
+    positions = w.pixel_to_world(x, y)
+    size = pix_angle_delta * u.degree
+    return SkyRectangularAperture(positions, size, size)
 
 
 def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
