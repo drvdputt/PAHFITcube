@@ -18,7 +18,6 @@ from astropy import units as u
 from pathlib import Path
 from matplotlib import pyplot as plt
 from photutils.aperture import SkyRectangularAperture
-import reproject
 from itertools import product
 from dataclasses import dataclass
 
@@ -176,7 +175,7 @@ def reproject_and_merge_cubes(
         *[
             Cube(
                 file_handle=None,
-                data=reproject_cube_data(
+                data=wcshacks.reproject_cube_data(
                     c.data, c.wcs, output_projection, npix_dec, npix_ra
                 ),
                 wavelength=c.wavelength,
@@ -200,25 +199,6 @@ def reproject_and_merge_cubes(
     merge_and_write_cubes(rpj_cube_set.all_cubes(), path)
 
 
-def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
-    """
-    Reproject every slice of cube onto wcs using ny, nx grid
-
-    Returns
-    -------
-    output_array: np.ndarray indexed on wavelength, y, x
-    """
-    num_wavs = cube_data.shape[0]
-    output_array = np.zeros((num_wavs, ny, nx))
-    for w in range(num_wavs):
-        output_array[w], footprint = reproject.reproject_adaptive(
-            input_data=(cube_data[w], cube_wcs),
-            output_projection=wcs,
-            shape_out=(ny, nx),
-        )
-    return output_array
-
-
 def merge_and_write_cubes(cubes, filename):
     """Merge a set of spectral cubes and write fits file
 
@@ -240,43 +220,8 @@ def merge_and_write_cubes(cubes, filename):
     output_cube_array = output_cube_array[order]
 
     if filename is not None:
-        path = Path(filename)
-        # multi extension (wav list and cube)
-        new_hdul = fits.HDUList()
-        # cube as primary hdu
-        header = cubes[0].wcs.to_header()
-        header["BUNIT"] = "MJy/sr"
-        # write out slice as test
-        test_hdul = fits.HDUList()
-        test_hdul.append(fits.PrimaryHDU(data=output_cube_array[0], header=header))
-        test_hdul.writeto(path.parent / ("slice_test_" + path.name), overwrite=True)
-
-        # manually set these cards, in an attempt to make the wavelength
-        # slider work properly in DS9
-        header["PC3_3"] = 1
-        header["CRPIX3"] = 1
-        header["CRVAL3"] = 1
-        header["CTYPE3"] = "WAVE-TAB"
-        header["CUNIT3"] = "um"
-        header["PS3_0"] = "WCS-TAB"
-        header["PS3_1"] = "WAVELENGTH"
-
-        new_hdul.append(fits.PrimaryHDU(data=output_cube_array, header=header))
-        # wavs as bintable hdu. Try to recreate the format of the
-        # Spitzer cubes.
-        weird_output_format = np.zeros(
-            shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(output_wavs), 1))]
-        )
-        for i in range(len(output_wavs)):
-            weird_output_format["WAVELENGTH"][0][i][0] = output_wavs[i]
-        wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
-        wavhdu.header["EXTNAME"] = "WCS-TAB"
-        wavhdu.header["TUNIT1"] = "um"
-        wavhdu.header["TDIM1"] = str((1, len(output_wavs)))
-
-        new_hdul.append(wavhdu)
-        # write
-        new_hdul.writeto(path, overwrite=True)
+        newwcs = cubes[0].wcs
+        wcshacks.write_merged_cube(filename, output_cube_array, output_wavs, newwcs)
 
 
 def make_square_aperture_grid(

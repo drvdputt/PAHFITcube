@@ -1,4 +1,10 @@
 from astropy.wcs import WCS
+import reproject
+from pathlib import Path
+from astropy.io import fits
+from astropy.table import Table
+import numpy as np
+
 
 def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     """Make simple WCS where X and Y are aligned with RA and DEC, respectively.
@@ -23,3 +29,56 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     w.wcs.cdelt = [-pix_angle_delta, pix_angle_delta]
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     return w
+
+
+def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
+    """
+    Reproject every slice of cube onto wcs using ny, nx grid
+
+    Returns
+    -------
+    output_array: np.ndarray indexed on wavelength, y, x
+    """
+    num_wavs = cube_data.shape[0]
+    output_array = np.zeros((num_wavs, ny, nx))
+    for w in range(num_wavs):
+        output_array[w], footprint = reproject.reproject_adaptive(
+            input_data=(cube_data[w], cube_wcs),
+            output_projection=wcs,
+            shape_out=(ny, nx),
+        )
+    return output_array
+
+
+def write_merged_cube(fn, data, wavs, spatial_wcs):
+    if isinstance(fn, Path):
+        path = fn
+    else:
+        path = Path(fn)
+
+    new_hdul = fits.HDUList()
+    header = spatial_wcs.to_header()
+    header["BUNIT"] = "MJy/sr"
+    # manually set these cards, but still can't seem to make the
+    # wavelength slider work properly in DS9
+    header["PC3_3"] = 1
+    header["CRPIX3"] = 1
+    header["CRVAL3"] = 1
+    header["CTYPE3"] = "WAVE-TAB"
+    header["CUNIT3"] = "um"
+    header["PS3_0"] = "WCS-TAB"
+    header["PS3_1"] = "WAVELENGTH"
+    # wavs as bintable hdu. Try to recreate the format of the
+    # Spitzer cubes.
+    new_hdul.append(fits.PrimaryHDU(data=data, header=header))
+    weird_output_format = np.zeros(
+        shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(wavs), 1))]
+    )
+    for i in range(len(wavs)):
+        weird_output_format["WAVELENGTH"][0][i][0] = wavs[i]
+    wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
+    wavhdu.header["EXTNAME"] = "WCS-TAB"
+    wavhdu.header["TUNIT1"] = "um"
+    wavhdu.header["TDIM1"] = str((1, len(wavs)))
+    new_hdul.append(wavhdu)
+    new_hdul.writeto(path, overwrite=True)
