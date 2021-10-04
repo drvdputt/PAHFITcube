@@ -4,6 +4,7 @@ import wcshacks
 from matplotlib import pyplot as plt
 import numpy as np
 from plotting import plot_cube
+from astropy import units as u
 
 # Glossary:
 # rpj = reprojected
@@ -47,7 +48,7 @@ def wavelengths(cube_model):
     the line.
 
     """
-    return cube_model.wcs.spectral.pixel_to_world(range(0, cube_model.shape[0])).value
+    return cube_model.wcs.spectral.pixel_to_world(range(0, cube_model.shape[0])).to(u.micron).value
 
 
 def rpj_and_merge(cube_models, newwcs, ny, nx):
