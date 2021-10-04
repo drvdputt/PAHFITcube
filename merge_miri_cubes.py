@@ -1,9 +1,9 @@
 from jwst.datamodels import CubeModel
-from resample_and_merge_spitzer_cubes import plot_cube
 from pathlib import Path
 import wcshacks
 from matplotlib import pyplot as plt
 import numpy as np
+from plotting import plot_cube
 
 # Glossary:
 # rpj = reprojected
