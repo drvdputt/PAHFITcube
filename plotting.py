@@ -26,7 +26,7 @@ def plot_cube(filename, name_in_title):
         pixel_x_choice = (nx // 2, nx // 4, nx // 2 + nx // 4)
         pixel_y_choice = (ny // 2, ny // 4, ny // 2 + ny // 4)
         for (x, y) in product(pixel_x_choice, pixel_y_choice):
-            plt.plot(wavs, cube[:, y, x])
+            plt.plot(wavs, cube[:, y, x], lw=1, label=str((x,y)))
 
         plt.xlabel("wavelength (micron)")
         plt.ylabel("pixel (MJy / sr)")
