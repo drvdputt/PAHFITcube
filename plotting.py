@@ -3,6 +3,7 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 from itertools import product
 from astropy.wcs import WCS
+from matplotlib.patches import Rectangle
 
 
 def plot_cube(filename, name_in_title):
@@ -21,10 +22,19 @@ def plot_cube(filename, name_in_title):
         ax.set_xlabel("RA")
         ax.set_ylabel("DEC")
 
-        plt.figure()
+        # choose some random pixels for which to plot the SED
         nw, ny, nx = cube.shape
         pixel_x_choice = (nx // 2, nx // 4, nx // 2 + nx // 4)
         pixel_y_choice = (ny // 2, ny // 4, ny // 2 + ny // 4)
+
+        # show the chosen pixels on the image
+        # positions = wcs.pixel_to_world(pixel_x_choice, pixel_y_choice)
+        # size = np.sqrt(wcs.proj_plane_pixel_area()) * u.degree
+
+        for (x, y) in product(pixel_x_choice, pixel_y_choice):
+            ax.add_patch(Rectangle((x - 0.5, y - 0.5), 1, 1, edgecolor='r', facecolor='none'))
+
+        plt.figure()
         for (x, y) in product(pixel_x_choice, pixel_y_choice):
             plt.plot(wavs, cube[:, y, x], lw=1, label=str((x,y)))
 
