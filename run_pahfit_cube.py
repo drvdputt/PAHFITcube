@@ -32,13 +32,6 @@ def main():
     num_fits = len(cube_spaxel_infos)
     if args.j > 1:
         with Pool(args.j) as p:
-            # do it like this as long as memory for all the pmodels is not
-            # an issue. If it becomes an issue, look at parallel iterators
-            # obsfits = p.starmap(
-            #     fit_spaxel,
-            #     [(cube_spaxel_infos[i], args) for i in range(len(cube_spaxel_infos))],
-            #     1,
-            # )
             parallel_iterator = p.imap(
                 fit_spaxel_wrapper,
                 ((cube_spaxel_infos[i], args) for i in range(num_fits)),
