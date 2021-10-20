@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from plotting import plot_cube
 from astropy import units as u
+from multiprocess import Pool
 
 # Glossary:
 # rpj = reprojected
@@ -48,14 +49,25 @@ def wavelengths(cube_model):
     the line.
 
     """
-    return cube_model.wcs.spectral.pixel_to_world(range(0, cube_model.shape[0])).to(u.micron).value
+    return (
+        cube_model.wcs.spectral.pixel_to_world(range(0, cube_model.shape[0]))
+        .to(u.micron)
+        .value
+    )
 
 
 def rpj_and_merge(cube_models, newwcs, ny, nx):
-    rpj_data = [
-        wcshacks.reproject_cube_data(c.data, c.wcs.sub((1, 2)), newwcs, ny, nx)
-        for c in cube_models
-    ]
+
+    with Pool(16) as p:
+        rpj_data = p.starmap(
+            wcshacks.reproject_cube_data,
+            [(c.data, c.wcs.sub((1, 2)), newwcs, ny, nx) for c in cube_models],
+        )
+
+    # rpj_data = [
+    #     wcshacks.reproject_cube_data(c.data, c.wcs.sub((1, 2)), newwcs, ny, nx)
+    #     for c in cube_models
+    # ]
 
     def plot12cubes(cbs):
         fig, axs = plt.subplots(3, 4)
@@ -90,8 +102,8 @@ def rpj_and_merge(cube_models, newwcs, ny, nx):
 
 def main():
     cubes = get_miri_cubes("../simulated-data-stsci/MRS2/stage3/", "Level3")
-    nx, ny = 5, 5
-    newwcs = wcshacks.make_ra_dec_wcs(0, 0, 1 / 3600, nx, ny)
+    nx, ny = 15, 15
+    newwcs = wcshacks.make_ra_dec_wcs(0, 0, 1 / 3600 / 10, nx, ny)
     wavs, cube = rpj_and_merge(cubes, newwcs, ny, nx)
 
     plot_cube("miri_merged.fits", "Resampled MIRI cube")
