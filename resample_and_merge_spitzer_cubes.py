@@ -36,6 +36,15 @@ class Cube:
     wavelength: np.ndarray
     wcs: WCS
 
+    def write(self, fn):
+        """Write to file.
+
+        I use this to write out the individual reprojected cubes.
+
+        fn: file name string
+        """
+        wcshacks.write_merged_cube(fn, self.data, self.wavelength, self.wcs)
+
 
 @dataclass
 class CubeSet:
@@ -51,6 +60,13 @@ class CubeSet:
     def all_cubes(self):
         """You can add functions to this type of class like this"""
         return [self.ll1, self.ll2, self.sl1, self.sl2]
+
+    def write_cubes(self, prefix):
+        fmt = prefix + "_{}.fits"
+        self.ll1.write(fmt.format("ll1"))
+        self.ll2.write(fmt.format("ll2"))
+        self.sl1.write(fmt.format("sl1"))
+        self.sl2.write(fmt.format("sl2"))
 
 
 def read_spitzer_cube(fn):
@@ -183,6 +199,9 @@ def reproject_and_merge_cubes(
             for c in cube_set.all_cubes()
         ]
     )
+
+    # write out individual cubes (for debugging / later reference)
+    rpj_cube_set.write_cubes("reprojected")
 
     # write out cube before stitching
     path = Path(filename)
