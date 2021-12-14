@@ -29,10 +29,10 @@ list of files should look like this
 ## Create input cube
 
 Because PAHFIT needs the whole wavelength range to work with, the 4 Spitzer cubes need to be
-merged first. The script `resample_and_merge_spitzer_cubes.py` takes care this. Since this is an
+merged first. The script `merge_spitzer_cubes.py` takes care this. Since this is an
 early test, it does not have command line arguments yet, so it only works for the data above. Simply run
 
-    python resample_and_merge_spitzer_cubes.py
+    python merge_spitzer_cubes.py
 
 ### Reprojection
 Because the field of view is different for each IFU cube, the Python package `reproject` is used
