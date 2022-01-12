@@ -1,11 +1,12 @@
 from astropy.wcs import WCS
 import reproject
-from pathlib import Path
-from astropy.io import fits
-from astropy.table import Table
 import numpy as np
 import astropy.units as u
 from photutils import SkyRectangularAperture
+from pathlib import Path
+from astropy.io import fits
+from astropy.table import Table
+import pickle
 
 
 def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
@@ -74,7 +75,10 @@ def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
 
 
 def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
-    """Use Spectrum1D to do write out cube
+    """Write out cube in fits format (for DS9) and as a pickle (for Spectrum1D)
+
+    The pickle can be given to run_pahfit_cube, which will use its
+    contents to make a Spectrum1D and obtain the WCS.
 
     Parameters
     ----------
@@ -122,3 +126,29 @@ def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     wavhdu.header["TDIM1"] = str((1, len(wavs)))
     new_hdul.append(wavhdu)
     new_hdul.writeto(path, overwrite=True)
+
+    # Ideally, I want to make a Spectrum1D, and save it as a fits file
+    # that readable by both DS9 and Spectrum1D.read(). But that doesn't
+    # seem supported yet, so I resort to pickling the input data for
+    # Spectrum1D below.
+    if spectral_axis is not None:
+        spec1d_flux_array = np.moveaxis(data, spectral_axis, -1)
+        # spec1d_flux_array = np.moveaxis(data, spectral_axis, 0)
+    else:
+        spec1d_flux_array = data
+
+    # MJy/sr
+    spec1d_flux_array_with_units = spec1d_flux_array * 1e6 * u.Jy / u.sr
+
+    pickle_path = path.with_suffix(".pickle")
+    with open(pickle_path, "wb") as f:
+        # Spectrum1D itself isn't pickleable. To make one, we need flux,
+        # wavelengths and spatial wcs. And perhaps uncertainties and
+        # data quality too, if we know how to calculate those for the
+        # merged cubes.
+        obj = {
+            "flux": spec1d_flux_array_with_units,
+            "spectral_axis": wavs * u.micron,
+            "spatial_wcs": spatial_wcs,
+        }
+        pickle.dump(obj, f)
