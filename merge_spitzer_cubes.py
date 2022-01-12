@@ -43,7 +43,9 @@ class Cube:
 
         fn: file name string
         """
-        wcshacks.write_merged_cube(fn, self.data, self.wavelength, self.wcs)
+        wcshacks.write_merged_cube(
+            fn, self.data, self.wavelength, self.wcs, spectral_axis=0
+        )
 
 
 @dataclass
@@ -239,7 +241,9 @@ def merge_and_write_cubes(cubes, filename):
 
     if filename is not None:
         newwcs = cubes[0].wcs
-        wcshacks.write_merged_cube(filename, output_cube_array, output_wavs, newwcs)
+        wcshacks.write_merged_cube(
+            filename, output_cube_array, output_wavs, newwcs, spectral_axis=0
+        )
 
 
 def main():

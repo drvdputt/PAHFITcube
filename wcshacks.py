@@ -73,7 +73,24 @@ def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
     return output_array
 
 
-def write_merged_cube(fn, data, wavs, spatial_wcs):
+def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
+    """Use Spectrum1D to do write out cube
+
+    Parameters
+    ----------
+
+    fn: str
+        file name
+
+    data: array (no unit!)
+        flux (in MJy/sr). Last axis must be spectral, or spectral_axis
+        should be set, so that it can be moved there.
+
+    wavs: array (no unit!)
+        wavelengths in micron
+
+    """
+
     if isinstance(fn, Path):
         path = fn
     else:
