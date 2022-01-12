@@ -3,14 +3,16 @@ from pahfit.helpers import initialize_model, fit_spectrum
 from pahfit.scripts.run_pahfit import initialize_parser
 from itertools import product
 from astropy.io import fits
-from astropy.table import Table
-from astropy import units as u
 from multiprocess import Pool
 from pathlib import Path
 from astropy.wcs import WCS
 import numpy as np
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+from specutils import Spectrum1D
+import pickle
+from astropy.nddata import StdDevUncertainty
+from astropy import units as u
 
 
 def main():
@@ -27,6 +29,10 @@ def main():
     )
     args = parser.parse_args()
     cube_spaxel_infos, map_info = read_cube(args.spectrumfile)
+    # When joint fitting is supported in PAHFIT, allow a list of cubes
+    # to be passed, instead of just a single cube. PAHFIT will then fit
+    # the cubes (with different wavelength ranges) simultaneously. They
+    # will all need to have the same WCS and spatial coverage though.
 
     # run everything
     num_fits = len(cube_spaxel_infos)
@@ -105,7 +111,8 @@ def main():
         except ValueError as error:
             print(error)
             print(f"Skipping plot x{x}y{y} due to the above error")
-            continue
+            # raise error
+            # continue
 
         # use the whitespace better
         fig.subplots_adjust(hspace=0)
@@ -126,8 +133,8 @@ def initialize_maps_dict(pmodel, shape):
     Returns
     -------
 
-    maps_dict : dictionary mapping feature names to
-"""
+    maps_dict : dictionary containing feature names as keys, and zeros
+    arrays to work with"""
     maps_dict = {}
     for component in pmodel.model:
         for i, name in enumerate(component.param_names):
@@ -184,6 +191,7 @@ def fit_spaxel(spaxel_info, args):
     if args.resume and outputpath_full.exists():
         # load model from previous (possibly partially completed) run
         pmodel = initialize_model(str(outputpath_full), obsdata, estimate_start=False)
+        print("Loaded existing fit results from " + outputpath_full)
     else:
         # setup the base model. Later, fitting could be optimized by being
         # smarter, and using information about neighbouring spaxels instead
@@ -212,37 +220,47 @@ def read_cube(cubefile):
     Returns
     -------
     spaxel_infos : list of dict
-        One entry per pixel. 'x' is x coordinate of pixel (in pixel
-        space), 'y' is y coordinate of pixel (in pixel space), 'obsdata'
-        is a dict in the same format as the output of read_spectrum.
+        One entry per pixel.
+
+        'x' is x index of pixel, 'y' is y index of pixel,
+
+        'obsdata' is a dict in the same format as the output of
+        pahfit.helpers.read_spectrum:
+            {'x': wavelengths, 'y': flux, 'unc': uncertainty}.
     """
-    cube_hdu = fits.open(cubefile)["PRIMARY"]
-    cube_unit = u.Unit(cube_hdu.header["BUNIT"])
-    cube_data = cube_hdu.data
-    cube_qty = cube_data * cube_unit
-    cube_2dwcs = WCS(cubefile, naxis=2)
+    if cubefile.endswith(".fits"):
+        # Try to load in this way. Confirmed to work for JWST cubes.
+        # Other cubes might need 'format' argument.
+        spec = Spectrum1D.read(cubefile)
+        # This does not seem to load the spatial wcs properly, so load
+        # that in a different way
+        cube_2dwcs = WCS(cubefile, naxis=2)
+    elif cubefile.endswith(".pickle"):
+        # We're dealing with output from the merging script here. See
+        # wcshacks.write_merged_cube.
+        with open(cubefile, "rb") as f:
+            data_dict = pickle.load(f)
+        try:
+            flux = data_dict["flux"]
+            spectral_axis = data_dict["spectral_axis"]
+            # mock the uncertainty to 10% for now
+            uncertainty = StdDevUncertainty(0.1 * flux)
+            spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
+            cube_2dwcs = data_dict["spatial_wcs"]
+        except Exception as e:
+            print(
+                "Something wrong with pickle. Needs to come from wcshacks.write_merged_cube."
+            )
+            raise e
 
-    cube_unc_data = fits.getdata(cubefile.replace(".fits", "_unc.fits"))
-    cube_unc_qty = cube_unc_data * cube_unit
-
-    wavtable = Table.read(cubefile)
-    # The wavelengths can be stored in a weird format sometimes.
-    # Flattening should make it consistent.
-    cube_wavs = wavtable["WAVELENGTH"].quantity.flatten()
-
-    if cube_data.shape != cube_unc_data.shape:
-        print("Uncertainties cube has wrong shape!")
-        exit()
-
-    if len(cube_wavs) != cube_data.shape[0]:
-        print("Wavelength table and cube are not compatible")
-        exit()
-
-    nwavs, ny, nx = cube_data.shape
+    cube_qty = spec.flux.to(u.MJy / u.sr)
+    cube_unc_qty = spec.uncertainty.quantity.to(u.MJy / u.sr)
+    cube_wavs = spec.wavelength.to(u.micron)
+    ny, nx, _ = spec.shape
 
     spaxel_infos = []
     for x, y in product(range(nx), range(ny)):
-        obsdata = {"x": cube_wavs, "y": cube_qty[:, y, x], "unc": cube_unc_qty[:, y, x]}
+        obsdata = {"x": cube_wavs, "y": cube_qty[y, x], "unc": cube_unc_qty[y, x]}
         spaxel_infos.append({"x": x, "y": y, "obsdata": obsdata})
 
     map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
