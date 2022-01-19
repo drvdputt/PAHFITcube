@@ -261,7 +261,8 @@ def main():
     fig = quicklook_cubes(cube_dicts, apr)
     fig.suptitle("Reprojection grid")
 
-    output_fn = "reprojected.fits"
+    output_fn = f"spitzer_reprojected/{target}.fits"
+    Path(output_fn).parent.mkdir(exist_ok=True)
     reproject_and_merge_cubes(
         cube_dicts,
         ra_center,
