@@ -15,6 +15,23 @@ from astropy.nddata import StdDevUncertainty
 from astropy import units as u
 
 
+def make_output_path(spectrumfile, suffix):
+    """Creates output path for file
+
+    New file will be <working directory>/<spectrumfile base name>/<spectrumfile base name + suffix>
+
+    spectrumfile: the file on which the suggested file name will be based
+
+    suffix: output name will be the stem of spectrumfile + suffix.
+
+    """
+    path = Path(spectrumfile)
+    output_dir = Path(".") / (path.stem + "_output_per_pixel")
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / f"{path.stem}_{suffix}"
+    return output_path
+
+
 def main():
     parser = initialize_parser()
     # Need to figure out the common parts between this set of arguments
@@ -68,12 +85,8 @@ def main():
     for key in maps_dict:
         hdu = fits.ImageHDU(data=maps_dict[key], header=header, name=key)
         new_hdul.append(hdu)
-
-    basename = args.spectrumfile.split(".")[0]
-    output_dir = Path(".") / (basename + "_output_per_pixel")
-    output_dir.mkdir(exist_ok=True)
-    outputname = str(output_dir / basename) + "_parameter_maps.fits"
-    new_hdul.writeto(outputname, overwrite=True)
+        outputname = make_output_path(args.spectrumfile, "parameter_maps.fits")
+        new_hdul.writeto(outputname, overwrite=True)
 
     # plot everything
     fontsize = 18
@@ -116,8 +129,10 @@ def main():
 
         # use the whitespace better
         fig.subplots_adjust(hspace=0)
-        outputname = str(output_dir / basename) + f"_x{x}y{y}"
-        fig.savefig("{}.{}".format(outputname, args.savefig))
+
+        # save using meaningful file name (contains coordinates + figure file type)
+        output_path = make_output_path(args.spectrumfile, f"x{x}y{y}.{args.savefig}")
+        fig.savefig(output_path)
 
 
 def initialize_maps_dict(pmodel, shape):
@@ -182,16 +197,16 @@ def fit_spaxel(spaxel_info, args):
     obsdata = spaxel_info["obsdata"]
 
     # determine file name for this pixel
-    basename = args.spectrumfile.split(".")[0]
-    output_dir = Path(".") / (basename + "_output_per_pixel")
-    output_dir.mkdir(exist_ok=True)
-    outputformat = str(output_dir / (basename + f"_x{x}y{y}"))
-    outputpath_full = output_dir / (basename + f"_x{x}y{y}_output." + args.saveoutput)
+    suffix = f"x{x}y{y}"
+    # pahfit adds stuff to the above format depending on file type
+    suffix_ipac = f"{suffix}_output.{args.saveoutput}"
+    output_path_format = make_output_path(args.spectrumfile, suffix)
+    output_path_ipac = make_output_path(args.spectrumfile, suffix_ipac)
 
-    if args.resume and outputpath_full.exists():
+    if args.resume and output_path_ipac.exists():
         # load model from previous (possibly partially completed) run
-        pmodel = initialize_model(str(outputpath_full), obsdata, estimate_start=False)
-        print("Loaded existing fit results from " + outputpath_full)
+        pmodel = initialize_model(str(output_path_ipac), obsdata, estimate_start=False)
+        print("Loaded existing fit results from " + output_path_ipac)
     else:
         # setup the base model. Later, fitting could be optimized by being
         # smarter, and using information about neighbouring spaxels instead
@@ -199,8 +214,7 @@ def fit_spaxel(spaxel_info, args):
         pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
         obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
         # Save each pixel to separate file. Useful for "--continue" option.
-
-        pmodel.save(obsfit, outputformat, args.saveoutput)
+        pmodel.save(obsfit, str(output_path_format), args.saveoutput)
 
     return pmodel
 
