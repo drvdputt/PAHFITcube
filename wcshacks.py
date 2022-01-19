@@ -73,6 +73,74 @@ def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
         )
     return output_array
 
+def write_wavetab_cube(fn, data, wave, spatial_wcs, spectral_axis=None):
+    """Write out cube data with unevenly spaced wavelengths
+
+    Based on some code I found in the JWST package, cube_build/ifu_cube.py
+    """
+    num = len(wave)
+    header = spatial_wcs.to_header()
+    header["BUNIT"] = "MJy/sr"
+    # translate these statements from the jwst package
+    # ifucube_model.meta.wcsinfo.ctype3 = 'WAVE-TAB'
+    #   ifucube_model.meta.wcsinfo.ps3_0 = 'WCS-TABLE'
+    #   ifucube_model.meta.wcsinfo.ps3_1 = 'wavelength'
+    #   ifucube_model.meta.wcsinfo.crval3 = 1.0
+    #   ifucube_model.meta.wcsinfo.crpix3 = 1.0
+    #   ifucube_model.meta.wcsinfo.cdelt3 = None
+    #   ifucube_model.meta.ifu.roi_wave = np.mean(self.roiw_table)
+    #   ifucube_model.wavedim = '(1,{:d})'.format(num)
+    wavedim = '(1,{:d})'.format(num)
+    header["CTYPE3"] = "WAVE-TAB"
+    header["PS3_0"] = "WCS-TABLE"
+    header["PS3_1"] = "wavelength"
+    header["CRVAL3"] = 1.0
+    header["CRPIX3"] = 1.0
+    # header["CDELT3"] = None
+    #   ifucube_model.meta.wcsinfo.cunit3 = 'um'
+    #   ifucube_model.meta.wcsinfo.wcsaxes = 3
+    #   ifucube_model.meta.wcsinfo.pc1_1 = -1
+    #   ifucube_model.meta.wcsinfo.pc1_2 = 0
+    #   ifucube_model.meta.wcsinfo.pc1_3 = 0
+    header["CUNIT3"] = "um"
+    header["WCSAXES"] = 3
+    header["PC1_1"] = -1
+    header["PC1_2"] = 0
+    header["PC1_3"] = 0
+    #   ifucube_model.meta.wcsinfo.pc2_1 = 0
+    #   ifucube_model.meta.wcsinfo.pc2_2 = 1
+    #   ifucube_model.meta.wcsinfo.pc2_3 = 0
+    header["PC2_1"] = 0
+    header["PC2_2"] = 1
+    header["PC2_3"] = 0
+    #   ifucube_model.meta.wcsinfo.pc3_1 = 0
+    #   ifucube_model.meta.wcsinfo.pc3_2 = 0
+    #   ifucube_model.meta.wcsinfo.pc3_3 = 1
+    header["PC3_1"] = 0
+    header["PC3_2"] = 0
+    header["PC3_3"] = 1
+
+    # this header is now ready. It is attached to the main data
+    # header["EXTNAME"] = 'SCI'
+    new_hdul = fits.HDUList()
+    new_hdul.append(fits.ImageHDU(data=data, header=header, name='SCI'))
+
+    # jwst package creates wavelength table like this
+    alldata = np.array(
+        [(wave[None].T, )],
+        dtype=[('wavelength', '<f4', (num, 1))]
+    )
+    # but does not show how it is actually put into fits file
+    # wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
+    wavhdu = fits.BinTableHDU(alldata, name='WCS-TABLE')
+    # wavhdu.header["TUNIT1"] = "um"
+    wavhdu.header["TDIM1"] = wavedim
+    wavhdu.header["TDIM2"] = wavedim
+    wavhdu.header["TTYPE1"] = 'wavelength'
+    new_hdul.append(wavhdu)
+
+    new_hdul.writeto(fn, overwrite=True)
+
 
 def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     """Write out cube in fits format (for DS9) and as a pickle (for Spectrum1D)
@@ -100,32 +168,36 @@ def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     else:
         path = Path(fn)
 
-    new_hdul = fits.HDUList()
-    header = spatial_wcs.to_header()
-    header["BUNIT"] = "MJy/sr"
-    # manually set these cards, but still can't seem to make the
-    # wavelength slider work properly in DS9
-    header["PC3_3"] = 1
-    header["CRPIX3"] = 1
-    header["CRVAL3"] = 1
-    header["CTYPE3"] = "WAVE-TAB"
-    header["CUNIT3"] = "um"
-    header["PS3_0"] = "WCS-TAB"
-    header["PS3_1"] = "WAVELENGTH"
-    # wavs as bintable hdu. Try to recreate the format of the
-    # Spitzer cubes.
-    new_hdul.append(fits.PrimaryHDU(data=data, header=header))
-    weird_output_format = np.zeros(
-        shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(wavs), 1))]
-    )
-    for i in range(len(wavs)):
-        weird_output_format["WAVELENGTH"][0][i][0] = wavs[i]
-    wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
-    wavhdu.header["EXTNAME"] = "WCS-TAB"
-    wavhdu.header["TUNIT1"] = "um"
-    wavhdu.header["TDIM1"] = str((1, len(wavs)))
-    new_hdul.append(wavhdu)
-    new_hdul.writeto(path, overwrite=True)
+    old = False
+    if old:
+        new_hdul = fits.HDUList()
+        header = spatial_wcs.to_header()
+        header["BUNIT"] = "MJy/sr"
+        # manually set these cards, but still can't seem to make the
+        # wavelength slider work properly in DS9
+        header["PC3_3"] = 1
+        header["CRPIX3"] = 1
+        header["CRVAL3"] = 1
+        header["CTYPE3"] = "WAVE-TAB"
+        header["CUNIT3"] = "um"
+        header["PS3_0"] = "WCS-TAB"
+        header["PS3_1"] = "WAVELENGTH"
+        # wavs as bintable hdu. Try to recreate the format of the
+        # Spitzer cubes.
+        new_hdul.append(fits.PrimaryHDU(data=data, header=header))
+        weird_output_format = np.zeros(
+            shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(wavs), 1))]
+        )
+        for i in range(len(wavs)):
+            weird_output_format["WAVELENGTH"][0][i][0] = wavs[i]
+        wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
+        wavhdu.header["EXTNAME"] = "WCS-TAB"
+        wavhdu.header["TUNIT1"] = "um"
+        wavhdu.header["TDIM1"] = str((1, len(wavs)))
+        new_hdul.append(wavhdu)
+        new_hdul.writeto(path, overwrite=True)
+    else:
+        write_wavetab_cube(fn, data, wavs, spatial_wcs)
 
     # Ideally, I want to make a Spectrum1D, and save it as a fits file
     # that readable by both DS9 and Spectrum1D.read(). But that doesn't
