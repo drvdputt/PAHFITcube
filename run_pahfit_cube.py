@@ -13,6 +13,22 @@ from specutils import Spectrum1D
 import pickle
 from astropy.nddata import StdDevUncertainty
 from astropy import units as u
+from dataclasses import dataclass
+
+
+@dataclass
+class Spaxel:
+    """Properties of a single spaxel, pass around frequently.
+
+    x and y: pixel coordinates, to remember which spectrum goes where
+
+    obsdata: dict in the same format as the output of pahfit.helpers.read_spectrum:
+        {'x': wavelengths, 'y': flux, 'unc': uncertainty}.
+    """
+
+    x: int
+    y: int
+    obsdata: dict
 
 
 def make_output_path(spectrumfile, suffix):
@@ -45,39 +61,37 @@ def main():
         help="Load pmodel for pixel from file if present",
     )
     args = parser.parse_args()
-    cube_spaxel_infos, map_info = read_cube(args.spectrumfile)
+    spaxels, map_info = read_cube(args.spectrumfile)
     # When joint fitting is supported in PAHFIT, allow a list of cubes
     # to be passed, instead of just a single cube. PAHFIT will then fit
     # the cubes (with different wavelength ranges) simultaneously. They
     # will all need to have the same WCS and spatial coverage though.
 
     # run everything
-    num_fits = len(cube_spaxel_infos)
+    num_fits = len(spaxels)
     if args.j > 1:
         with Pool(args.j) as p:
             parallel_iterator = p.imap(
                 fit_spaxel_wrapper,
-                ((cube_spaxel_infos[i], args) for i in range(num_fits)),
+                ((spaxels[i], args) for i in range(num_fits)),
             )
             pmodels = []
             for i, pmodel in enumerate(parallel_iterator):
                 pmodels.append(pmodel)
                 print(f"Finished fit {i}/{num_fits}")
     else:
-        pmodels = [fit_spaxel(s, args) for s in cube_spaxel_infos]
+        pmodels = [fit_spaxel(s, args) for s in spaxels]
 
     # make sure the spaxel infos and the obsfits are in the same order:
     maps_dict = initialize_maps_dict(pmodels[0], shape=(map_info["ny"], map_info["nx"]))
-    for spaxel_info, pmodel in zip(cube_spaxel_infos, pmodels):
-        x = spaxel_info["x"]
-        y = spaxel_info["y"]
+    for spaxel, pmodel in zip(spaxels, pmodels):
         for component in pmodel.model:
             for i, value in enumerate(component.parameters):
                 key = feature_name(component, i)
                 # initialize_maps_dict has already chosen which
                 # parameters we are going to write out
                 if key in maps_dict:
-                    maps_dict[key][y, x] = value
+                    maps_dict[key][spaxel.y, spaxel.x] = value
 
     # save the maps
     header = map_info["wcs"].to_header()
@@ -98,11 +112,11 @@ def main():
     mpl.rc("ytick.major", size=5, width=1)
     mpl.rc("xtick.minor", size=3, width=1)
     mpl.rc("ytick.minor", size=3, width=1)
-    for spaxel_info, pmodel in zip(cube_spaxel_infos, pmodels):
-        obsdata = spaxel_info["obsdata"]
+    for spaxel, pmodel in zip(spaxels, pmodels):
+        obsdata = spaxel.obsdata
         obsfit = pmodel.model
-        x = spaxel_info["x"]
-        y = spaxel_info["y"]
+        x = spaxel.x
+        y = spaxel.x
 
         fig, axs = plt.subplots(
             ncols=1,
@@ -176,13 +190,13 @@ def fit_spaxel_wrapper(x):
     return fit_spaxel(*x)
 
 
-def fit_spaxel(spaxel_info, args):
+def fit_spaxel(spaxel, args):
     """
     Fits a single spaxel, write out to separate files
 
     Parameters
     ----------
-    spaxel_info : dictionary where x = pixel x coordinate, y = pixel y coordinate and obsdata dict
+    spaxel : Spaxel
 
     args : the command line arguments
 
@@ -191,13 +205,8 @@ def fit_spaxel(spaxel_info, args):
     pmodel : PAHFITBase model
         PAHFIT model
     """
-    # get pixel indices and observed data
-    x = spaxel_info["x"]
-    y = spaxel_info["y"]
-    obsdata = spaxel_info["obsdata"]
-
     # determine file name for this pixel
-    suffix = f"x{x}y{y}"
+    suffix = f"x{spaxel.x}y{spaxel.y}"
     # pahfit adds stuff to the above format depending on file type
     suffix_ipac = f"{suffix}_output.{args.saveoutput}"
     output_path_format = make_output_path(args.spectrumfile, suffix)
@@ -205,14 +214,18 @@ def fit_spaxel(spaxel_info, args):
 
     if args.resume and output_path_ipac.exists():
         # load model from previous (possibly partially completed) run
-        pmodel = initialize_model(str(output_path_ipac), obsdata, estimate_start=False)
-        print("Loaded existing fit results from " + output_path_ipac)
+        pmodel = initialize_model(
+            str(output_path_ipac), spaxel.obsdata, estimate_start=False
+        )
+        print(f"Loaded existing fit results from {output_path_ipac}")
     else:
         # setup the base model. Later, fitting could be optimized by being
         # smarter, and using information about neighbouring spaxels instead
         # of starting from scratch each time.
-        pmodel = initialize_model(args.packfile, obsdata, not args.no_starting_estimate)
-        obsfit = fit_spectrum(obsdata, pmodel, maxiter=args.fit_maxiter)
+        pmodel = initialize_model(
+            args.packfile, spaxel.obsdata, not args.no_starting_estimate
+        )
+        obsfit = fit_spectrum(spaxel.obsdata, pmodel, maxiter=args.fit_maxiter)
         # Save each pixel to separate file. Useful for "--continue" option.
         pmodel.save(obsfit, str(output_path_format), args.saveoutput)
 
@@ -233,14 +246,7 @@ def read_cube(cubefile):
 
     Returns
     -------
-    spaxel_infos : list of dict
-        One entry per pixel.
-
-        'x' is x index of pixel, 'y' is y index of pixel,
-
-        'obsdata' is a dict in the same format as the output of
-        pahfit.helpers.read_spectrum:
-            {'x': wavelengths, 'y': flux, 'unc': uncertainty}.
+    spaxels : list of Spaxel
     """
     if cubefile.endswith(".fits"):
         # Try to load in this way. Confirmed to work for JWST cubes.
@@ -272,13 +278,13 @@ def read_cube(cubefile):
     cube_wavs = spec.wavelength.to(u.micron)
     ny, nx, _ = spec.shape
 
-    spaxel_infos = []
+    spaxels = []
     for x, y in product(range(nx), range(ny)):
         obsdata = {"x": cube_wavs, "y": cube_qty[y, x], "unc": cube_unc_qty[y, x]}
-        spaxel_infos.append({"x": x, "y": y, "obsdata": obsdata})
+        spaxels.append(Spaxel(x, y, obsdata))
 
     map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
-    return spaxel_infos, map_info
+    return spaxels, map_info
 
 
 if __name__ == "__main__":
