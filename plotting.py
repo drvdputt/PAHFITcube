@@ -8,7 +8,7 @@ from matplotlib.patches import Rectangle
 
 def plot_cube(filename, name_in_title):
     """Plots some slices and SEDs in a cube"""
-    wavs = Table.read(filename)["WAVELENGTH"][0].flatten()
+    wavs = Table.read(filename)["wavelength"][0].flatten()
     with fits.open(filename) as hdulist:
         cube = hdulist["PRIMARY"].data
         wcs = WCS(filename, naxis=2)
