@@ -170,32 +170,7 @@ def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
 
     old = False
     if old:
-        new_hdul = fits.HDUList()
-        header = spatial_wcs.to_header()
-        header["BUNIT"] = "MJy/sr"
-        # manually set these cards, but still can't seem to make the
-        # wavelength slider work properly in DS9
-        header["PC3_3"] = 1
-        header["CRPIX3"] = 1
-        header["CRVAL3"] = 1
-        header["CTYPE3"] = "WAVE-TAB"
-        header["CUNIT3"] = "um"
-        header["PS3_0"] = "WCS-TAB"
-        header["PS3_1"] = "WAVELENGTH"
-        # wavs as bintable hdu. Try to recreate the format of the
-        # Spitzer cubes.
-        new_hdul.append(fits.PrimaryHDU(data=data, header=header))
-        weird_output_format = np.zeros(
-            shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(wavs), 1))]
-        )
-        for i in range(len(wavs)):
-            weird_output_format["WAVELENGTH"][0][i][0] = wavs[i]
-        wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
-        wavhdu.header["EXTNAME"] = "WCS-TAB"
-        wavhdu.header["TUNIT1"] = "um"
-        wavhdu.header["TDIM1"] = str((1, len(wavs)))
-        new_hdul.append(wavhdu)
-        new_hdul.writeto(path, overwrite=True)
+        write_merged_cube_old(fn, data, wavs, spatial_wcs)
     else:
         write_wavetab_cube(fn, data, wavs, spatial_wcs)
 
@@ -224,3 +199,32 @@ def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
             "spatial_wcs": spatial_wcs,
         }
         pickle.dump(obj, f)
+
+
+def write_merged_cube_old(fn, data, wavs, spatial_wcs):
+    new_hdul = fits.HDUList()
+    header = spatial_wcs.to_header()
+    header["BUNIT"] = "MJy/sr"
+    # manually set these cards, but still can't seem to make the
+    # wavelength slider work properly in DS9
+    header["PC3_3"] = 1
+    header["CRPIX3"] = 1
+    header["CRVAL3"] = 1
+    header["CTYPE3"] = "WAVE-TAB"
+    header["CUNIT3"] = "um"
+    header["PS3_0"] = "WCS-TAB"
+    header["PS3_1"] = "WAVELENGTH"
+    # wavs as bintable hdu. Try to recreate the format of the
+    # Spitzer cubes.
+    new_hdul.append(fits.PrimaryHDU(data=data, header=header))
+    weird_output_format = np.zeros(
+        shape=(1,), dtype=[("WAVELENGTH", ">f4", (len(wavs), 1))]
+    )
+    for i in range(len(wavs)):
+        weird_output_format["WAVELENGTH"][0][i][0] = wavs[i]
+    wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
+    wavhdu.header["EXTNAME"] = "WCS-TAB"
+    wavhdu.header["TUNIT1"] = "um"
+    wavhdu.header["TDIM1"] = str((1, len(wavs)))
+    new_hdul.append(wavhdu)
+    new_hdul.writeto(fn, overwrite=True)
