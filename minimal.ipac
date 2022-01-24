@@ -1,0 +1,11 @@
+|     Name|           Form|  temp|temp_min|temp_max|temp_fixed|   amp|amp_min|amp_max|amp_fixed|     x_0| x_0_min| x_0_max|x_0_fixed|   fwhm|fwhm_min|fwhm_max|fwhm_fixed|
+|     char|           char|double|  double|  double|      char|double| double| double|     char|  double|  double|  double|     char| double|  double|  double|      char|
+|         |               |      |        |        |          |      |       |       |         |        |        |        |         |       |        |        |          |
+|     null|           null|  null|    null|    null|      null|  null|   null|   null|     null|    null|    null|    null|     null|   null|    null|    null|      null|
+       BB0     BlackBody1D 5000.0      0.0      nan       True  1e-10     0.0     nan     False     null     null     null      null    null     null     null       null
+       DF0         Drude1D   null     null     null       null   1.e6     0.0     nan     False      7.6     7.50     7.70      True 0.17918 0.161262 0.197098       True
+       DF1         Drude1D   null     null     null       null   1.e6     0.0     nan     False     7.85     7.75     7.95      True  0.1995  0.17955  0.21945       True
+       DF2         Drude1D   null     null     null       null   1.e6     0.0     nan     False     8.30     8.20     8.40      True  0.1866  0.16794  0.20526       True
+       DF3         Drude1D   null     null     null       null   1.e6     0.0     nan     False     8.58     8.48     8.68      True  0.4683  0.42147  0.51513       True
+   H2 S(4)      Gaussian1D   null     null     null       null   1.e6     0.0     nan     False   8.0258   7.9758   8.0758     False    0.02    0.001     0.10      False
+   S07_att S07_attenuation   null     null     null       null    1.0     0.0    10.0     False     null     null     null      null    null     null     null       null
