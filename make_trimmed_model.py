@@ -1,6 +1,8 @@
 import numpy as np
 from astropy.table import Table
 from pahfit.base import PAHFITBase
+import os
+import pkg_resources
 
 
 def make_trimmed_model(packfile, obsdata):
@@ -22,6 +24,16 @@ def make_trimmed_model(packfile, obsdata):
         PAHFIT model based on trimmed science pack table
 
     """
+    # If packfile not in current directory, try to find one of the same
+    # name that comes with PAHFIT
+    if not os.path.isfile(packfile):
+        pack_path = pkg_resources.resource_filename("pahfit", "packs/")
+        test_packfile = "{}/{}".format(pack_path, packfile)
+        if os.path.isfile(test_packfile):
+            packfile = test_packfile
+        else:
+            raise ValueError("Input packfile {} not found".format(packfile))
+
     # determine wavelength range
     w = obsdata["x"].value
     wmin = np.amin(w)
