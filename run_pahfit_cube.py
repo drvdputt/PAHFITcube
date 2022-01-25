@@ -116,7 +116,7 @@ def main():
         obsdata = spaxel.obsdata
         obsfit = pmodel.model
         x = spaxel.x
-        y = spaxel.x
+        y = spaxel.y
 
         fig, axs = plt.subplots(
             ncols=1,
