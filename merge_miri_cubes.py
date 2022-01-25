@@ -10,7 +10,8 @@ import argparse
 
 # Glossary:
 # rpj = reprojected
-
+output_dir = Path("./miri_reprojected")
+output_dir.mkdir(exist_ok=True)
 
 def read_miri_cube_file(fn):
     return CubeModel(fn)
@@ -60,7 +61,7 @@ def wavelengths(cube_model):
 
 def rpj_and_merge(cube_models, newwcs, ny, nx):
 
-    with Pool(16) as p:
+    with Pool(8) as p:
         rpj_data = p.starmap(
             wcshacks.reproject_cube_data,
             [(c.data, c.wcs.sub((1, 2)), newwcs, ny, nx) for c in cube_models],
@@ -88,6 +89,16 @@ def rpj_and_merge(cube_models, newwcs, ny, nx):
         ax.set_title(title)
     plot12cubes(rpj_data)
 
+    # save individual reprojected cubes too
+    for cube_model, new_data in zip(cube_models, rpj_data):
+        wcshacks.write_merged_cube(
+            output_dir / f"reprojected_{cube_model.meta.filename}",
+            new_data,
+            wavelengths(cube_model),
+            newwcs,
+            spectral_axis=0,
+        )
+
     output_wavs = np.concatenate([wavelengths(c) for c in cube_models])
     output_cube_array = np.concatenate([data for data in rpj_data], axis=0)
 
@@ -97,7 +108,11 @@ def rpj_and_merge(cube_models, newwcs, ny, nx):
     output_cube_array = output_cube_array[order]
 
     wcshacks.write_merged_cube(
-        "miri_merged.fits", output_cube_array, output_wavs, newwcs, spectral_axis=0
+        output_dir / "reprojected_allcube.fits",
+        output_cube_array,
+        output_wavs,
+        newwcs,
+        spectral_axis=0,
     )
     return output_wavs, output_cube_array
 
@@ -113,9 +128,7 @@ def main():
     nx, ny = 15, 15
     newwcs = wcshacks.make_ra_dec_wcs(0, 0, 1 / 3600 / 10, nx, ny)
     wavs, cube = rpj_and_merge(cubes, newwcs, ny, nx)
-
-    plot_cube("miri_merged.fits", "Resampled MIRI cube")
-
+    plot_cube(output_dir / "reprojected_allcube.fits", "Resampled MIRI cube")
     plt.show()
 
 
