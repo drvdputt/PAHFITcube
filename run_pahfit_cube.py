@@ -148,6 +148,7 @@ def main():
         # save using meaningful file name (contains coordinates + figure file type)
         output_path = make_output_path(args.spectrumfile, f"x{x}y{y}.{args.savefig}")
         fig.savefig(output_path)
+        fig.close()
 
 
 def initialize_maps_dict(pmodel, shape):
@@ -239,6 +240,8 @@ def read_cube(cubefile):
     Read multiple spectra from a data cube and convert input units to
     the expected internal PAHFIT units.
 
+    Spaxels for which the flux is entirely zero will not be loaded.
+
     Parameters
     ----------
     cubefile : string
@@ -283,7 +286,10 @@ def read_cube(cubefile):
     spaxels = []
     for x, y in product(range(nx), range(ny)):
         obsdata = {"x": cube_wavs, "y": cube_qty[y, x], "unc": cube_unc_qty[y, x]}
-        spaxels.append(Spaxel(x, y, obsdata))
+        if not all(obsdata["y"] == 0):
+            spaxels.append(Spaxel(x, y, obsdata))
+
+    print(f"{len(spaxels)}/{nx * ny} spaxels will be fit")
 
     map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
     return spaxels, map_info
