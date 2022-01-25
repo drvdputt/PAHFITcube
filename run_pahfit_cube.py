@@ -148,7 +148,7 @@ def main():
         # save using meaningful file name (contains coordinates + figure file type)
         output_path = make_output_path(args.spectrumfile, f"x{x}y{y}.{args.savefig}")
         fig.savefig(output_path)
-        fig.close()
+        plt.close(fig)
 
 
 def initialize_maps_dict(pmodel, shape):
