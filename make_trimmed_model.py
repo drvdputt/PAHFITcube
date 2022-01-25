@@ -4,6 +4,24 @@ from pahfit.base import PAHFITBase
 
 
 def make_trimmed_model(packfile, obsdata):
+    """
+    Load a complete science model, and remove any components that are outside of the wavelength range.
+
+    Parameters
+    ----------
+
+    packfile:
+        Path to the ipac file from which the complete model will be loaded.
+
+    obsdata:
+        dict containing wavelengths 'x', flux 'y', and uncertainty 'unc'
+
+    Returns
+    -------
+    pmodel: PAHFITBase model
+        PAHFIT model based on trimmed science pack table
+
+    """
     # determine wavelength range
     w = obsdata["x"].value
     wmin = np.amin(w)
