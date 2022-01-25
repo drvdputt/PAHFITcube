@@ -14,6 +14,7 @@ import pickle
 from astropy.nddata import StdDevUncertainty
 from astropy import units as u
 from dataclasses import dataclass
+from make_trimmed_model import make_trimmed_model
 
 
 @dataclass
@@ -222,9 +223,10 @@ def fit_spaxel(spaxel, args):
         # setup the base model. Later, fitting could be optimized by being
         # smarter, and using information about neighbouring spaxels instead
         # of starting from scratch each time.
-        pmodel = initialize_model(
-            args.packfile, spaxel.obsdata, not args.no_starting_estimate
-        )
+        # pmodel = initialize_model(
+        #     args.packfile, spaxel.obsdata, not args.no_starting_estimate
+        # )
+        pmodel = make_trimmed_model(args.packfile, spaxel.obsdata)
         obsfit = fit_spectrum(spaxel.obsdata, pmodel, maxiter=args.fit_maxiter)
         # Save each pixel to separate file. Useful for "--continue" option.
         pmodel.save(obsfit, str(output_path_format), args.saveoutput)
