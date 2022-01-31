@@ -15,6 +15,7 @@ from astropy.nddata import StdDevUncertainty
 from astropy import units as u
 from dataclasses import dataclass
 from make_trimmed_model import make_trimmed_model
+from pahfit.base import PAHFITBase
 
 
 @dataclass
@@ -76,17 +77,17 @@ def main():
                 fit_spaxel_wrapper,
                 ((spaxels[i], args) for i in range(num_fits)),
             )
-            pmodels = []
-            for i, pmodel in enumerate(parallel_iterator):
-                pmodels.append(pmodel)
+            models = []
+            for i, model in enumerate(parallel_iterator):
+                models.append(model)
                 print(f"Finished fit {i}/{num_fits}")
     else:
-        pmodels = [fit_spaxel(s, args) for s in spaxels]
+        models = [fit_spaxel(s, args) for s in spaxels]
 
     # make sure the spaxel infos and the obsfits are in the same order:
-    maps_dict = initialize_maps_dict(pmodels[0], shape=(map_info["ny"], map_info["nx"]))
-    for spaxel, pmodel in zip(spaxels, pmodels):
-        for component in pmodel.model:
+    maps_dict = initialize_maps_dict(models[0], shape=(map_info["ny"], map_info["nx"]))
+    for spaxel, model in zip(spaxels, models):
+        for component in model:
             for i, value in enumerate(component.parameters):
                 key = feature_name(component, i)
                 # initialize_maps_dict has already chosen which
@@ -113,17 +114,17 @@ def main():
     mpl.rc("ytick.major", size=5, width=1)
     mpl.rc("xtick.minor", size=3, width=1)
     mpl.rc("ytick.minor", size=3, width=1)
-    for spaxel, pmodel in zip(spaxels, pmodels):
-        plot_spaxel_result(args, spaxel, pmodel)
+    for spaxel, model in zip(spaxels, models):
+        plot_spaxel_result(args, spaxel, model)
 
 
-def initialize_maps_dict(pmodel, shape):
+def initialize_maps_dict(model, shape):
     """Initialize every output map using np.zeros
 
     Parameters
     ----------
 
-    pmodel : fit result for one of the pixels, to provide the feature names
+    model : fit result for one of the pixels, to provide the feature names
 
     shape : shape of the array used to represent the maps
 
@@ -133,7 +134,7 @@ def initialize_maps_dict(pmodel, shape):
     maps_dict : dictionary containing feature names as keys, and zeros
     arrays to work with"""
     maps_dict = {}
-    for component in pmodel.model:
+    for component in model:
         for i, name in enumerate(component.param_names):
             # only write out non-fixed parameters
             if not component.fixed[name]:
@@ -198,12 +199,11 @@ def fit_spaxel(spaxel, args):
         # Save each pixel to separate file. Useful for "--continue" option.
         pmodel.save(obsfit, str(output_path_format), args.saveoutput)
 
-    return pmodel
+    return obsfit
 
 
-def plot_spaxel_result(args, spaxel, pmodel):
+def plot_spaxel_result(args, spaxel, model):
     obsdata = spaxel.obsdata
-    obsfit = pmodel.model
     x = spaxel.x
     y = spaxel.y
 
@@ -216,12 +216,12 @@ def plot_spaxel_result(args, spaxel, pmodel):
     )
 
     try:
-        pmodel.plot(
+        PAHFITBase.plot(
             axs,
             obsdata["x"],
             obsdata["y"],
             obsdata["unc"],
-            obsfit,
+            model,
             scalefac_resid=args.scalefac_resid,
         )
     except ValueError as error:
@@ -239,7 +239,7 @@ def plot_spaxel_result(args, spaxel, pmodel):
     plt.close(fig)
 
 
-def read_cube(cubefile):
+def read_cube(cubefile, only_one=False):
     """
     Read multiple spectra from a data cube and convert input units to
     the expected internal PAHFIT units.
@@ -282,13 +282,16 @@ def read_cube(cubefile):
             )
             raise e
 
+    # problem: pahfit assumes Jy, not Jy / sr. Should ask about this.
     cube_qty = spec.flux.to(u.MJy / u.sr)
     cube_unc_qty = spec.uncertainty.quantity.to(u.MJy / u.sr)
-    cube_wavs = spec.wavelength.to(u.micron)
+    cube_wavs = spec.spectral_axis.to(u.micron)
     ny, nx, _ = spec.shape
 
     spaxels = []
-    for x, y in product(range(nx), range(ny)):
+    # option to use only center pixel, useful for testing
+    xy_tuples = [(nx // 2, ny // 2)] if only_one else product(range(nx), range(ny))
+    for x, y in xy_tuples:
         obsdata = {"x": cube_wavs, "y": cube_qty[y, x], "unc": cube_unc_qty[y, x]}
         if not all(obsdata["y"] == 0):
             spaxels.append(Spaxel(x, y, obsdata))
