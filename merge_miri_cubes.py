@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from jwst.datamodels import CubeModel
 from pathlib import Path
 import wcshacks
