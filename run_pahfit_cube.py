@@ -114,41 +114,7 @@ def main():
     mpl.rc("xtick.minor", size=3, width=1)
     mpl.rc("ytick.minor", size=3, width=1)
     for spaxel, pmodel in zip(spaxels, pmodels):
-        obsdata = spaxel.obsdata
-        obsfit = pmodel.model
-        x = spaxel.x
-        y = spaxel.y
-
-        fig, axs = plt.subplots(
-            ncols=1,
-            nrows=2,
-            figsize=(15, 10),
-            gridspec_kw={"height_ratios": [3, 1]},
-            sharex=True,
-        )
-
-        try:
-            pmodel.plot(
-                axs,
-                obsdata["x"],
-                obsdata["y"],
-                obsdata["unc"],
-                obsfit,
-                scalefac_resid=args.scalefac_resid,
-            )
-        except ValueError as error:
-            print(error)
-            print(f"Skipping plot x{x}y{y} due to the above error")
-            # raise error
-            # continue
-
-        # use the whitespace better
-        fig.subplots_adjust(hspace=0)
-
-        # save using meaningful file name (contains coordinates + figure file type)
-        output_path = make_output_path(args.spectrumfile, f"x{x}y{y}.{args.savefig}")
-        fig.savefig(output_path)
-        plt.close(fig)
+        plot_spaxel_result(args, spaxel, pmodel)
 
 
 def initialize_maps_dict(pmodel, shape):
@@ -233,6 +199,44 @@ def fit_spaxel(spaxel, args):
         pmodel.save(obsfit, str(output_path_format), args.saveoutput)
 
     return pmodel
+
+
+def plot_spaxel_result(args, spaxel, pmodel):
+    obsdata = spaxel.obsdata
+    obsfit = pmodel.model
+    x = spaxel.x
+    y = spaxel.y
+
+    fig, axs = plt.subplots(
+        ncols=1,
+        nrows=2,
+        figsize=(15, 10),
+        gridspec_kw={"height_ratios": [3, 1]},
+        sharex=True,
+    )
+
+    try:
+        pmodel.plot(
+            axs,
+            obsdata["x"],
+            obsdata["y"],
+            obsdata["unc"],
+            obsfit,
+            scalefac_resid=args.scalefac_resid,
+        )
+    except ValueError as error:
+        print(error)
+        print(f"Skipping plot x{x}y{y} due to the above error")
+        # raise error
+        # continue
+
+    # use the whitespace better
+    fig.subplots_adjust(hspace=0)
+
+    # save using meaningful file name (contains coordinates + figure file type)
+    output_path = make_output_path(args.spectrumfile, f"x{x}y{y}.{args.savefig}")
+    fig.savefig(output_path)
+    plt.close(fig)
 
 
 def read_cube(cubefile):
