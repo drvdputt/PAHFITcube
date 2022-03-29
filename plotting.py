@@ -11,7 +11,7 @@ def plot_cube(filename, name_in_title):
     wavs = Table.read(filename)["wavelength"][0].flatten()
     with fits.open(filename) as hdulist:
         cube = hdulist["PRIMARY"].data
-        wcs = WCS(filename, naxis=2)
+        wcs = WCS(str(filename), naxis=2)
 
         fig = plt.figure()
         ax = fig.add_subplot(projection=wcs)
