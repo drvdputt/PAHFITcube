@@ -5,18 +5,17 @@ import os
 import pkg_resources
 
 
-def make_trimmed_model(packfile, obsdata):
+def initialize_trimmed_model(packfile, obsdata):
     """
-    Load a complete science model, and remove any components that are outside of the wavelength range.
+    Initialize a model based on the packfile, ignoring components outside of the wavelength range.
 
     Parameters
     ----------
+    packfile : string
+        file with the PAHFIT pack information
 
-    packfile:
-        Path to the ipac file from which the complete model will be loaded.
-
-    obsdata:
-        dict containing wavelengths 'x', flux 'y', and uncertainty 'unc'
+    obsdata : dict
+        observed data where x = wavelength, y = SED, and unc = uncertainties
 
     Returns
     -------
