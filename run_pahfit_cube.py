@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from pahfit.helpers import initialize_model, fit_spectrum
-from pahfit.scripts.run_pahfit import initialize_parser
 from itertools import product
 from astropy.io import fits
 from multiprocess import Pool
@@ -14,8 +12,14 @@ import pickle
 from astropy.nddata import StdDevUncertainty
 from astropy import units as u
 from dataclasses import dataclass
-from make_trimmed_model import initialize_trimmed_model
+
+from pahfit.helpers import initialize_model, fit_spectrum
+from pahfit.scripts.run_pahfit import initialize_parser
 from pahfit.base import PAHFITBase
+
+from pahfit_cube.deprecated.make_trimmed_model import initialize_trimmed_model
+
+
 
 
 @dataclass
@@ -296,8 +300,12 @@ def read_cube(cubefile, only_one=False):
     map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
     return spaxels, map_info
 
-
-def main():
+def main(args_list=None):
+    """
+    args_list: list of str
+        override the command line arguments (useful for calling main
+        from another script)
+    """
     parser = initialize_parser()
     # Need to figure out the common parts between this set of arguments
     # and those set in initialize_parser, so that the single spectrum
@@ -309,7 +317,11 @@ def main():
         action="store_true",
         help="Load pmodel for pixel from file if present",
     )
-    args = parser.parse_args()
+    if args_list is None:
+        args = parser.parse_args()
+    else:
+        args = parser.parse_args(args_list)
+
     run_pahfit_cube(args)
 
 
