@@ -14,7 +14,7 @@ import pickle
 from astropy.nddata import StdDevUncertainty
 from astropy import units as u
 from dataclasses import dataclass
-from make_trimmed_model import make_trimmed_model
+from make_trimmed_model import initialize_trimmed_model
 from pahfit.base import PAHFITBase
 
 
@@ -50,8 +50,15 @@ def make_output_path(spectrumfile, suffix):
     return output_path
 
 
-def run_pahfit_cube(spectrumfile, j, resume):
-    spaxels, map_info = read_cube(spectrumfile)
+def run_pahfit_cube(args):
+    """Main function, called after parsing the args.
+
+    Can also be run by importing it, and passing the right args. Run
+    ./run_pahfit_cube.py --help to see which arguments can be specified.
+    The ones currently used
+
+    """
+    spaxels, map_info = read_cube(args.spectrumfile)
     # When joint fitting is supported in PAHFIT, allow a list of cubes
     # to be passed, instead of just a single cube. PAHFIT will then fit
     # the cubes (with different wavelength ranges) simultaneously. They
@@ -182,7 +189,7 @@ def fit_spaxel(spaxel, args):
         # pmodel = initialize_model(
         #     args.packfile, spaxel.obsdata, not args.no_starting_estimate
         # )
-        pmodel = make_trimmed_model(args.packfile, spaxel.obsdata)
+        pmodel = initialize_trimmed_model(args.packfile, spaxel.obsdata)
         obsfit = fit_spectrum(spaxel.obsdata, pmodel, maxiter=args.fit_maxiter)
         # Save each pixel to separate file. Useful for "--continue" option.
         pmodel.save(obsfit, str(output_path_format), args.saveoutput)
