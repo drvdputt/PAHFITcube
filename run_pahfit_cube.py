@@ -20,8 +20,6 @@ from pahfit.base import PAHFITBase
 from pahfit_cube.deprecated.make_trimmed_model import initialize_trimmed_model
 
 
-
-
 @dataclass
 class Spaxel:
     """Properties of a single spaxel, pass around frequently.
@@ -280,6 +278,8 @@ def read_cube(cubefile, only_one=False):
                 "Something wrong with pickle. Needs to come from wcshacks.write_merged_cube."
             )
             raise e
+    else:
+        raise ValueError("Cube file not compatible.")
 
     # problem: pahfit assumes Jy, not Jy / sr. Should ask about this.
     cube_qty = spec.flux.to(u.MJy / u.sr)
@@ -299,6 +299,7 @@ def read_cube(cubefile, only_one=False):
 
     map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
     return spaxels, map_info
+
 
 def main(args_list=None):
     """
