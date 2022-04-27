@@ -50,20 +50,8 @@ def make_output_path(spectrumfile, suffix):
     return output_path
 
 
-def main():
-    parser = initialize_parser()
-    # Need to figure out the common parts between this set of arguments
-    # and those set in initialize_parser, so that the single spectrum
-    # and the cube case can each have there own arguments, without
-    # unnecessary duplication.
-    parser.add_argument("-j", type=int, default=1, help="Number of parallel processes")
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Load pmodel for pixel from file if present",
-    )
-    args = parser.parse_args()
-    spaxels, map_info = read_cube(args.spectrumfile)
+def run_pahfit_cube(spectrumfile, j, resume):
+    spaxels, map_info = read_cube(spectrumfile)
     # When joint fitting is supported in PAHFIT, allow a list of cubes
     # to be passed, instead of just a single cube. PAHFIT will then fit
     # the cubes (with different wavelength ranges) simultaneously. They
@@ -300,6 +288,22 @@ def read_cube(cubefile, only_one=False):
 
     map_info = {"nx": nx, "ny": ny, "wcs": cube_2dwcs}
     return spaxels, map_info
+
+
+def main():
+    parser = initialize_parser()
+    # Need to figure out the common parts between this set of arguments
+    # and those set in initialize_parser, so that the single spectrum
+    # and the cube case can each have there own arguments, without
+    # unnecessary duplication.
+    parser.add_argument("-j", type=int, default=1, help="Number of parallel processes")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Load pmodel for pixel from file if present",
+    )
+    args = parser.parse_args()
+    run_pahfit_cube(args)
 
 
 if __name__ == "__main__":
