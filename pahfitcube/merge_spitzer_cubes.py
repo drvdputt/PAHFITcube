@@ -179,7 +179,7 @@ def reproject_and_merge_cubes(
     Result is sorted by wavelength.
 
     """
-    if not ".fits" in filename:
+    if ".fits" not in filename:
         print("filename should end in .fits")
         raise
 
