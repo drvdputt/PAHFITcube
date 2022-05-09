@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from jwst.datamodels import CubeModel
 from pathlib import Path
-import pahfitcube.wcshacks
+from pahfitcube import wcshacks
 from matplotlib import pyplot as plt
 import numpy as np
 from pahfitcube.plotting import plot_cube
@@ -13,6 +13,7 @@ import argparse
 # rpj = reprojected
 output_dir = Path("./miri_reprojected")
 output_dir.mkdir(exist_ok=True)
+
 
 def read_miri_cube_file(fn):
     return CubeModel(fn)

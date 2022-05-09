@@ -19,7 +19,7 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 from dataclasses import dataclass
 from pahfitcube.plotting import plot_cube
-import pahfitcube.wcshacks
+from pahfitcube import wcshacks
 
 
 @dataclass
