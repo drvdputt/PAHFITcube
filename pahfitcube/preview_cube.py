@@ -1,6 +1,6 @@
 """Simple script for a quick look at the cube merge results"""
 
-import plotting
+import pahfitcube.plotting
 import argparse
 import matplotlib.pyplot as plt
 

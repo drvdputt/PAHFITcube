@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 from jwst.datamodels import CubeModel
 from pathlib import Path
-import wcshacks
+import pahfitcube.wcshacks
 from matplotlib import pyplot as plt
 import numpy as np
-from plotting import plot_cube
+from pahfitcube.plotting import plot_cube
 from astropy import units as u
 from multiprocess import Pool
 import argparse

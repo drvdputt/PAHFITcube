@@ -18,10 +18,8 @@ from astropy import units as u
 from pathlib import Path
 from matplotlib import pyplot as plt
 from dataclasses import dataclass
-from plotting import plot_cube
-
-# local imports
-import wcshacks
+from pahfitcube.plotting import plot_cube
+import pahfitcube.wcshacks
 
 
 @dataclass
