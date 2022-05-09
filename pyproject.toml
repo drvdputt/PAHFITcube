@@ -1,6 +1,6 @@
-[project]
-name = "pahfitcube"
-version = "0"
+# # [project]
+# # name = "pahfitcube"
+# # version = "0"
 
 [build-system]
 
@@ -13,5 +13,5 @@ requires = ["setuptools",
 
 build-backend = 'setuptools.build_meta'
 
-[tool.setuptools]
-packages = ["pahfitcube"]
+# [tool.setuptools]
+# packages = ["pahfitcube"]
