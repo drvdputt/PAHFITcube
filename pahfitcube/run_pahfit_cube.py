@@ -17,7 +17,7 @@ from pahfit.helpers import initialize_model, fit_spectrum
 from pahfit.scripts.run_pahfit import initialize_parser
 from pahfit.base import PAHFITBase
 
-from pahfit_cube.deprecated.make_trimmed_model import initialize_trimmed_model
+from pahfitcube.deprecated.make_trimmed_model import initialize_trimmed_model
 
 
 @dataclass
