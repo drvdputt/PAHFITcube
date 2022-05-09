@@ -1,3 +1,7 @@
+[project]
+name = "pahfitcube"
+version = "0"
+
 [build-system]
 
 requires = ["setuptools",
@@ -8,3 +12,6 @@ requires = ["setuptools",
             # "cython==0.29.14"]
 
 build-backend = 'setuptools.build_meta'
+
+[tool.setuptools]
+packages = ["pahfitcube"]
