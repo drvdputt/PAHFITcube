@@ -32,11 +32,13 @@ def plot_cube(filename, name_in_title):
         # size = np.sqrt(wcs.proj_plane_pixel_area()) * u.degree
 
         for (x, y) in product(pixel_x_choice, pixel_y_choice):
-            ax.add_patch(Rectangle((x - 0.5, y - 0.5), 1, 1, edgecolor='r', facecolor='none'))
+            ax.add_patch(
+                Rectangle((x - 0.5, y - 0.5), 1, 1, edgecolor="r", facecolor="none")
+            )
 
         plt.figure()
         for (x, y) in product(pixel_x_choice, pixel_y_choice):
-            plt.plot(wavs, cube[:, y, x], lw=1, label=str((x,y)))
+            plt.plot(wavs, cube[:, y, x], lw=1, label=str((x, y)))
 
         plt.xlabel("wavelength (micron)")
         plt.ylabel("pixel (MJy / sr)")

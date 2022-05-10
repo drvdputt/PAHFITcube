@@ -73,6 +73,7 @@ def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
         )
     return output_array
 
+
 def write_wavetab_cube(fn, data, wave, spatial_wcs, spectral_axis=None):
     """Write out cube data with unevenly spaced wavelengths
 
@@ -90,7 +91,7 @@ def write_wavetab_cube(fn, data, wave, spatial_wcs, spectral_axis=None):
     #   ifucube_model.meta.wcsinfo.cdelt3 = None
     #   ifucube_model.meta.ifu.roi_wave = np.mean(self.roiw_table)
     #   ifucube_model.wavedim = '(1,{:d})'.format(num)
-    wavedim = '(1,{:d})'.format(num)
+    wavedim = "(1,{:d})".format(num)
     header["CTYPE3"] = "WAVE-TAB"
     header["PS3_0"] = "WCS-TABLE"
     header["PS3_1"] = "wavelength"
@@ -123,20 +124,17 @@ def write_wavetab_cube(fn, data, wave, spatial_wcs, spectral_axis=None):
     # this header is now ready. It is attached to the main data
     # header["EXTNAME"] = 'SCI'
     new_hdul = fits.HDUList()
-    new_hdul.append(fits.ImageHDU(data=data, header=header, name='SCI'))
+    new_hdul.append(fits.ImageHDU(data=data, header=header, name="SCI"))
 
     # jwst package creates wavelength table like this
-    alldata = np.array(
-        [(wave[None].T, )],
-        dtype=[('wavelength', '<f4', (num, 1))]
-    )
+    alldata = np.array([(wave[None].T,)], dtype=[("wavelength", "<f4", (num, 1))])
     # but does not show how it is actually put into fits file
     # wavhdu = fits.table_to_hdu(Table(data=weird_output_format))
-    wavhdu = fits.BinTableHDU(alldata, name='WCS-TABLE')
+    wavhdu = fits.BinTableHDU(alldata, name="WCS-TABLE")
     # wavhdu.header["TUNIT1"] = "um"
     wavhdu.header["TDIM1"] = wavedim
     wavhdu.header["TDIM2"] = wavedim
-    wavhdu.header["TTYPE1"] = 'wavelength'
+    wavhdu.header["TTYPE1"] = "wavelength"
     new_hdul.append(wavhdu)
 
     new_hdul.writeto(fn, overwrite=True)

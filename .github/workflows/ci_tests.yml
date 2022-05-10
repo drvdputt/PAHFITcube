@@ -12,6 +12,7 @@ on:
   pull_request:
     # branches: # only build on PRs against 'main' if you need to further limit when CI is run.
     #    - main
+    # this should be working?
 
 jobs:
   # Github Actions supports ubuntu, windows, and macos virtual environments:
@@ -42,10 +43,10 @@ jobs:
             python: 3.8
             toxenv: py38-test-alldeps
 
-          - name: Windows - Python 3.8 with all optional dependencies
-            os: windows-latest
-            python: 3.8
-            toxenv: py38-test-alldeps
+          # - name: Windows - Python 3.8 with all optional dependencies
+          #   os: windows-latest
+          #   python: 3.8
+          #   toxenv: py38-test-alldeps
 
           # - name: Python 3.7 with oldest supported version of all dependencies
           #   os: ubuntu-16.04
