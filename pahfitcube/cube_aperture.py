@@ -3,6 +3,7 @@ from astropy.wcs.utils import proj_plane_pixel_area
 from specutils import Spectrum1D
 from astropy.wcs import WCS
 from astropy import units as u
+from matplotlib import pyplot
 
 
 def wcs_from_spec1d(spec1d):
@@ -11,17 +12,27 @@ def wcs_from_spec1d(spec1d):
     return WCS(spec1d.meta["header"])
 
 
-def make_cube_image_mask(wcs_2d, shape_2d, sky_aperture):
+def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
     # use wcs to make pixel mask
     pixel_mask = sky_aperture.to_pixel(wcs_2d).to_mask(method="exact")
 
-    # use shape to make image mask
-    image_mask = pixel_mask.to_image(shape_2d)
+    # watch out here! To_image works in y,x coordinates! Need to provide
+    # shape as (y,x), and then convert the image mask to a mask that
+    # works for our array, by transposing.
+    image_mask = pixel_mask.to_image(shape_2d[::-1])
 
     if image_mask is None:
         print("Something wrong with make overlap!")
 
-    return image_mask
+    array_mask = image_mask.T
+    return array_mask
+
+
+def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture):
+    wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
+    array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
+    ax1.imshow(cube_spec1d[:, :, cube_spec1d.shape[2] // 2].data)
+    ax2.imshow(array_mask)
 
 
 def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
@@ -29,10 +40,10 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
     wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
 
     # use wcs and shape to make mask
-    image_mask = make_cube_image_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
+    array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
 
     # broadcast the mask over the slices and multiply
-    masked_cube = image_mask[:, :, None] * cube_spec1d.data
+    masked_cube = array_mask[:, :, None] * cube_spec1d.data
 
     # collapse the masked cube
     spectrum = np.average(masked_cube, axis=(0, 1))
