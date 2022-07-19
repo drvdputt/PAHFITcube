@@ -7,12 +7,33 @@ from matplotlib import pyplot
 
 
 def wcs_from_spec1d(spec1d):
-    """Create a WCS from the header stored in the metadata of a Spectrum1D
-    object representing a cube"""
+    """Create a WCS from header in metadata of a Spectrum1D cube
+
+    Returns
+    -------
+
+    Celestial wcs
+
+    """
     return WCS(spec1d.meta["header"])
 
 
 def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
+    """Make an array representing an aperture discretized on the spatial wcs/grid.
+
+        Parameters
+        ----------
+        wcs_2d: WCS
+            the celestial wcs of a cube
+    _
+        shape_2d: (int, int)
+            the celestial part of the shape of a cube
+
+        Returns
+        -------
+        array_mask: np.array of shape shape_2d.
+
+    """
     # use wcs to make pixel mask
     pixel_mask = sky_aperture.to_pixel(wcs_2d).to_mask(method="exact")
 
@@ -36,6 +57,22 @@ def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture):
 
 
 def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
+    """Extract a 1D spectrum from a cube using an aperture over all the slices.
+
+    Parameters
+    ----------
+    cube_spec1d: Spectrum1D
+        Object loaded from cube file using Spectrum1D.read
+
+    sky_aperture: SkyAperture
+        The aperture to apply. Is converted to pixel mask suitable for the cube.
+
+    Returns
+    -------
+    spectrum: Spectrum1D
+        The collapsed spectrum.
+
+    """
     # make 2D wcs of cube
     wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
 
