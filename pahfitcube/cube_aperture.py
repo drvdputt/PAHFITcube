@@ -96,12 +96,12 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
     # collapse
     spectrum = np.sum(masked_cube, axis=(0, 1))
     # collapse the uncertainty. Variances = (mask value * sigma) **2
-    sigmas = np.sqrt(np.sum(np.square(masked_unc), axis(0,1)))
+    sigmas = np.sqrt(np.sum(np.square(masked_unc), axis=(0, 1)))
 
     # make a spectrum1d object for convenience
     s1d = Spectrum1D(
         spectral_axis=cube_spec1d.spectral_axis,
-        flux=spectrum * cube_spec1d.flux.unit,
-        uncertainty=StdDevUncertainty(sigmas * u.cube_spec1d.flux.unit)
+        flux=spectrum,
+        uncertainty=StdDevUncertainty(sigmas)
     )
     return s1d
