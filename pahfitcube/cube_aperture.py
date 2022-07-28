@@ -4,6 +4,7 @@ from specutils import Spectrum1D
 from astropy.wcs import WCS
 from astropy import units as u
 from matplotlib import pyplot
+from astropy.nddata import StdDevUncertainty
 
 
 def wcs_from_spec1d(spec1d):
@@ -52,7 +53,8 @@ def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
 def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture):
     wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
     array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
-    ax1.imshow(cube_spec1d[:, :, cube_spec1d.shape[2] // 2].data)
+    example_image = cube_spec1d[:, :, cube_spec1d.shape[2] // 2].data * (1 + array_mask[:, :, None])
+    ax1.imshow(np.log10(example_image))
     ax2.imshow(array_mask)
 
 
@@ -82,17 +84,23 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
     # broadcast the mask over the slices and multiply
     masked_cube = array_mask[:, :, None] * cube_spec1d.data
 
-    # collapse the masked cube
-    spectrum = np.average(masked_cube, axis=(0, 1))
+    # Add units again, and convert to MJy
+    area = (proj_plane_pixel_area(wcs_2d) * u.deg**2).to(u.sr)
+    masked_cube = masked_cube * cube_spec1d.flux.unit * area
 
-    # convert from average MJy sr-1 to total flux in MJy
-    # average per sr * total sr = average * area * number
-    pix_area = (proj_plane_pixel_area(wcs_2d) * u.deg**2).to(u.sr)
-    spectrum = spectrum * pix_area * cube_spec1d.shape[0] * cube_spec1d.shape[1]
+    # do the same for uncertainty
+    masked_unc = array_mask[:, :, None] * cube_spec1d.uncertainty.array
+    masked_unc = masked_unc * cube_spec1d.flux.unit * area
+
+    # collapse
+    spectrum = np.sum(masked_cube, axis=(0, 1))
+    # collapse the uncertainty. Variances = (mask value * sigma) **2
+    sigmas = np.sqrt(np.sum(np.square(masked_unc), axis(0,1)))
 
     # make a spectrum1d object for convenience
     s1d = Spectrum1D(
-        spectral_axis=cube_spec1d.spectral_axis, flux=spectrum * cube_spec1d.flux.unit
+        spectral_axis=cube_spec1d.spectral_axis,
+        flux=spectrum * cube_spec1d.flux.unit,
+        uncertainty=StdDevUncertainty(sigmas * u.cube_spec1d.flux.unit)
     )
-
     return s1d
