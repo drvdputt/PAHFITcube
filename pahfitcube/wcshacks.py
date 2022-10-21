@@ -9,7 +9,49 @@ from astropy.table import Table
 import pickle
 
 
-def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
+def cube_wcs_extent(wcs, shape):
+    """Get center and four corners"""
+    # get only the celestial wcs
+    wcs2d = wcs.sub((1, 2))
+
+    # the four corners in pixel space
+    corners = [(0, 0), (0, shape[1]), (shape[0], 0), (shape[0], shape[1])]
+    sky_corners = wcs2d.pixel_to_world(corners)
+    # sky_center = wcs2d.pixel_to_world([(shape[0] // 2, shape[1] // 2)])
+    return sky_corners
+
+
+def make_reasonable_wcs(spec1d_cubes, fov, res=None):
+    """
+    fov = (ra span, dec span) in arcsec
+    """
+    # extents = [
+    #     cube_wcs_extent(WCS(s.meta["header"]), s.shape[:2]) for s in spec1d_cubes
+    # ]
+
+    # choose center of first cube
+    header = spec1d_cubes[0].meta["header"]
+    center_ra = header["CRVAL1"]
+    center_dec = header["CRVAL2"]
+
+    # size choice is manual for now
+    fov_ra = fov[0] / 3600
+    fov_dec = fov[1] / 3600
+
+    # determine number of pixels along each axis
+    if res is None:
+        # default to .1 arcsec
+        pix_degree_delta = 0.1 / 3600
+    else:
+        pix_degree_delta = res / 3600
+
+    nx = int(fov_ra / pix_degree_delta)
+    ny = int(fov_dec / pix_degree_delta)
+
+    return make_ra_dec_wcs(center_ra, center_dec, pix_degree_delta, nx, ny), ny, nx
+
+
+def make_ra_dec_wcs(center_ra, center_dec, pix_degree_delta, npix_ra, npix_dec):
     """Make simple WCS where X and Y are aligned with RA and DEC, respectively.
 
     center_ra, center_dec: determines crval
@@ -29,7 +71,7 @@ def make_ra_dec_wcs(center_ra, center_dec, pix_angle_delta, npix_ra, npix_dec):
     center_y = npix_dec / 2 + 0.5
     w.wcs.crpix = [center_x, center_y]
     w.wcs.crval = [center_ra, center_dec]
-    w.wcs.cdelt = [-pix_angle_delta, pix_angle_delta]
+    w.wcs.cdelt = [-pix_degree_delta, pix_degree_delta]
     w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
     return w
 
@@ -56,29 +98,39 @@ def make_square_aperture_grid(
 
 
 def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
-    """
-    Reproject every slice of cube onto wcs using ny, nx grid
+    """Reproject every slice of cube onto wcs using ny, nx grid
+
+    This function assumes the spectrum1D convention of putting the
+    wavelength index last.
 
     Returns
     -------
     output_array: np.ndarray indexed on wavelength, y, x
+
     """
-    num_wavs = cube_data.shape[0]
-    output_array = np.zeros((num_wavs, ny, nx))
+    num_wavs = cube_data.shape[-1]
+    output_array = np.zeros((ny, nx, num_wavs))
     for w in range(num_wavs):
-        output_array[w], footprint = reproject.reproject_adaptive(
-            input_data=(cube_data[w], cube_wcs),
+        output_array[..., w], footprint = reproject.reproject_adaptive(
+            input_data=(cube_data[..., w], cube_wcs),
             output_projection=wcs,
             shape_out=(ny, nx),
         )
     return output_array
 
 
-def write_wavetab_cube(fn, data, wave, spatial_wcs, spectral_axis=None):
+def write_wavetab_cube(fn, cube_data, wave, spatial_wcs, wav_axis_index=-1):
     """Write out cube data with unevenly spaced wavelengths
 
     Based on some code I found in the JWST package, cube_build/ifu_cube.py
+
+    wav_axis_index default is -1, to conform with spectrum1D.
     """
+    if wav_axis_index != 0:
+        data = np.moveaxis(cube_data, wav_axis_index, 0)
+    else:
+        data = cube_data
+
     num = len(wave)
     header = spatial_wcs.to_header()
     header["BUNIT"] = "MJy/sr"
@@ -140,7 +192,7 @@ def write_wavetab_cube(fn, data, wave, spatial_wcs, spectral_axis=None):
     new_hdul.writeto(fn, overwrite=True)
 
 
-def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
+def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     """Write out cube in fits format (for DS9) and as a pickle (for Spectrum1D)
 
     The pickle can be given to run_pahfit_cube, which will use its
@@ -160,17 +212,12 @@ def write_merged_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
         wavelengths in micron
 
     """
-
     if isinstance(fn, Path):
         path = fn
     else:
         path = Path(fn)
 
-    old = False
-    if old:
-        write_merged_cube_old(fn, data, wavs, spatial_wcs)
-    else:
-        write_wavetab_cube(fn, data, wavs, spatial_wcs)
+    write_wavetab_cube(fn, data, wavs, spatial_wcs, spectral_axis)
 
     # Ideally, I want to make a Spectrum1D, and save it as a fits file
     # that readable by both DS9 and Spectrum1D.read(). But that doesn't
