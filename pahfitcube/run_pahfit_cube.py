@@ -15,16 +15,20 @@ def run_pahfit_cube(args):
     """
     # load spectral cube
     spec, _, wcs = read_cube(args.spectrumfile)
+    spec.meta["instrument"] = args.instrumentname
 
-    # set up cube model based on single-spectrum model
-    model = Model.from_yaml(args.packfile, args.instrumentname, 0)
+    # set up cube model with single PAHFIT model as starting point
+    model = Model.from_yaml(args.packfile)
     cube_model = CubeModel(model)
 
-    # do the fitting (or load from checkpoints)
+    # determine location of checkpoint files (if checkpointing is
+    # desired)
     if args.resume:
         checkpoint_prefix = f"checkpoints/{args.spectrumfile}"
     else:
         checkpoint_prefix = None
+
+    # do the fit
     cube_model.fit(spec, checkpoint_prefix)
 
     # save result
