@@ -57,7 +57,7 @@ class CubeModel:
         self.model = model
         self.flat_feature_names = unique_feature_dict(model).keys()
 
-    def fit(self, cube: Spectrum1D, checkpoint_prefix=None):
+    def fit(self, cube: Spectrum1D, checkpoint_prefix=None, maxiter=1000):
         """The main fitting routine. Fits the same PAHFIT model to each
         spaxel of the given cube
 
@@ -83,13 +83,13 @@ class CubeModel:
                         model_xy = Model.from_saved(fn)
                     else:
                         model_xy = self.model.copy()
-                        model_xy.fit(cube[x, y])
+                        model_xy.fit(cube[x, y], maxiter=maxiter)
                         model_xy.save(fn)
 
                 # without checkpoints, use simpler logic
                 else:
                     model_xy = self.model.copy()
-                    model_xy.fit(cube[x, y])
+                    model_xy.fit(cube[x, y], maxiter=maxiter)
                 # store all the models for later reference
                 self.models[(x, y)] = model_xy
                 # also write to mapcollection

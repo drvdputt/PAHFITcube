@@ -2,7 +2,8 @@
 from pahfit.scripts.run_pahfit import initialize_parser
 from pahfitcube.cube_model import CubeModel
 from pahfit.model import Model
-from read_cube import read_cube
+from pahfitcube.read_cube import read_cube
+from pathlib import Path
 
 
 def run_pahfit_cube(args):
@@ -21,18 +22,26 @@ def run_pahfit_cube(args):
     model = Model.from_yaml(args.packfile)
     cube_model = CubeModel(model)
 
+    # output directory
+    output_dir = Path(args.o).resolve()
+    output_dir.mkdir(exist_ok=True)
+    # output file prefix (removes the extension .fits or .pickle)
+    output_base = Path(args.spectrumfile).name.rsplit(".", 1)[0]
+
     # determine location of checkpoint files (if checkpointing is
     # desired)
     if args.resume:
-        checkpoint_prefix = f"checkpoints/{args.spectrumfile}"
+        checkpoint_dir = output_dir / "checkpoints"
+        checkpoint_dir.mkdir(exist_ok=True)
+        checkpoint_prefix = str(checkpoint_dir / output_base)
     else:
         checkpoint_prefix = None
 
     # do the fit
-    cube_model.fit(spec, checkpoint_prefix)
+    cube_model.fit(spec, checkpoint_prefix, maxiter=args.fit_maxiter)
 
     # save result
-    cube_model.maps.save(wcs, f"{args.spectrumfile}_maps.fits")
+    cube_model.maps.save(wcs, str(output_dir / (output_base + "_maps.fits")))
 
     # # run everything
     # num_fits = len(spaxels)
@@ -67,6 +76,7 @@ def main(args_list=None):
         action="store_true",
         help="Load pmodel for pixel from file if present",
     )
+    parser.add_argument("-o", default=".", help="Output directory")
     if args_list is None:
         args = parser.parse_args()
     else:
