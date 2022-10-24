@@ -21,7 +21,7 @@ def main():
     ap.add_argument("fov_ra_dec", help="field of view in arcsec", type=float, nargs=2)
     ap.add_argument("--format", help="format for Spectrum1D.read()")
     ap.add_argument("-o", help="output directory")
-    ap.add_argument("--res", help="pixel scale in arcsec", type=float)
+    ap.add_argument("--res", type=float, default=0.1, help="pixel scale in arcsec (default 0.1)")
     ap.add_argument("cubes", nargs="+", type=str)
     args = ap.parse_args()
     output_dir = Path(args.o)
