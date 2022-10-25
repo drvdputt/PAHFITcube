@@ -6,6 +6,7 @@ from os.path import isfile
 from astropy.io import fits
 from matplotlib import pyplot as plt
 import astropy
+from multiprocess.pool import Pool
 
 
 class MapCollection:
@@ -21,8 +22,10 @@ class MapCollection:
         if name in self.names:
             return self.data[self.index[name]]
         else:
-            raise RuntimeError(f"Map of {name} not in map collection\n"
-                               "Available names are" + str([k for k in self.index]))
+            raise RuntimeError(
+                f"Map of {name} not in map collection\n"
+                "Available names are" + str([k for k in self.index])
+            )
 
     def save(self, wcs, fits_fn):
         """Save to one (or many?) files."""
@@ -42,7 +45,7 @@ def unique_feature_dict(model: Model):
         base_name = row["name"]
         for col in ["temperature", "tau", "wavelength", "power", "fwhm"]:
             # do not add unused parameters. But make exception for line FWHM.
-            if not row[col].mask[0] or row["kind"] == 'line' and col == "fwhm":
+            if not row[col].mask[0] or row["kind"] == "line" and col == "fwhm":
                 d[f"{base_name}_{col}"] = row[col][0]
     return d
 
@@ -56,8 +59,9 @@ class CubeModel:
     def __init__(self, model: Model):
         self.model = model
         self.flat_feature_names = unique_feature_dict(model).keys()
+        self.maps = None
 
-    def fit(self, cube: Spectrum1D, checkpoint_prefix=None, maxiter=1000):
+    def fit(self, cube: Spectrum1D, checkpoint_prefix=None, maxiter=1000, j=1):
         """The main fitting routine. Fits the same PAHFIT model to each
         spaxel of the given cube
 
@@ -70,6 +74,30 @@ class CubeModel:
 
         # make many copies of model and fit them
         nx, ny = cube.shape[:-1]
+
+        if j > 1:
+            self.model.save("temp.ecsv", overwrite=True)
+            with Pool(j) as p:
+                # generates arguments for wrapper
+                args_it = (
+                    dict(
+                        x=x,
+                        y=y,
+                        # cube=cube,
+                        model="temp.ecsv",
+                        checkpoint_prefix=checkpoint_prefix,
+                        maxiter=maxiter,
+                    )
+                    for x, y in product(range(nx), range(ny))
+                )
+                # generates models by calling wrapper on arguments
+                results_it = p.imap(wrapper, args_it)
+
+                # do the parallel iteration
+                for model_xy, args in zip(results_it, args_it):
+                    if model_xy is not None:
+                        self._ingest_single_model(model_xy, args["x"], args["y"])
+
         for x, y in product(range(nx), range(ny)):
             if all(cube.flux[x, y] == 0) or not all(np.isfinite(cube.flux[x, y])):
                 continue
@@ -101,6 +129,7 @@ class CubeModel:
     def _ingest_single_model(self, model, x, y):
         # print("ingesting result")
         # print(model)
+        self.models[(x, y)] = model
         flat_result = unique_feature_dict(model)
         for k, v in flat_result.items():
             self.maps[k][x, y] = v
@@ -119,3 +148,39 @@ class CubeModel:
             fig.savefig(save_fn)
 
         plt.close(fig)
+
+
+# wrapper_args = [dict(x=x, y=y, cube=cube, model=model) for x, y in bla]
+
+
+def wrapper(args):
+    x = args["x"]
+    y = args["y"]
+    cube = args["cube"]
+    model = args["model"]
+    checkpoint_prefix = args["checkpoint_prefix"]
+    maxiter = args["maxiter"]
+
+    if all(cube.flux[x, y] == 0) or not all(np.isfinite(cube.flux[x, y])):
+        return None
+
+    model_xy = None
+    try:
+        # with checkpoints
+        if checkpoint_prefix is not None:
+            fn = f"{checkpoint_prefix}_xy_{x}_{y}.ecsv"
+            if isfile(fn):
+                model_xy = Model.from_saved(fn)
+            else:
+                model_xy = Model.from_saved(model)
+                model_xy.fit(cube[x, y], maxiter=maxiter)
+                model_xy.save(fn)
+        # without checkpoints, use simpler logic
+        else:
+            model_xy = Model.from_saved(model)
+            model_xy.fit(cube[x, y], maxiter=maxiter)
+        # store all the models for later reference
+        return None
+    except astropy.modeling.fitting.NonFiniteValueError as e:
+        print(f"Fit failed for pixel {x} {y} due to {e}")
+        return None
