@@ -7,12 +7,18 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 import astropy
 from multiprocess.pool import Pool
+from tqdm import tqdm
 
 
 class MapCollection:
     """Object representing a collection of nd named maps with the same wcs."""
 
     def __init__(self, names, shape):
+        """
+        names: list of str
+
+        shape: nx, ny
+        """
         self.names = names
         self.data = np.zeros((len(names), *shape))
         self.index = {name: i for i, name in enumerate(self.names)}
@@ -26,6 +32,15 @@ class MapCollection:
                 f"Map of {name} not in map collection\n"
                 "Available names are" + str([k for k in self.index])
             )
+
+    def plot_map(self, name):
+        plt.figure()
+        array = self[name]
+        vmin = np.amin(array)
+        vmax = np.percentile(array, 99)
+        # imshow assumes (y, x), so transpose
+        plt.imshow(self[name].T, origin="lower", vmin=vmin, vmax=vmax)
+        plt.colorbar()
 
     def save(self, wcs, fits_fn):
         """Save to one (or many?) files."""
@@ -62,23 +77,30 @@ class CubeModel:
         self.maps = None
 
     def fit(self, cube: Spectrum1D, checkpoint_prefix=None, maxiter=1000, j=1):
-        """The main fitting routine. Fits the same PAHFIT model to each
-        spaxel of the given cube
+        """Fit the same PAHFIT model to each spaxel of a given cube.
 
         checkpoint_prefix : str
+            e.g. "path/to/dir/prefix_"
+
             Where progress files are stored, so fitting can be
             interrupted and continued later.
+
+            Files that are already there (and match the pattern) will be
+            loaded instead of fitted. This way, fit also acts as a
+            loading function.
+
         """
-        self.maps = MapCollection(self.flat_feature_names, cube.shape[:-1])
+        # I'm being explicit here as a reminder that spectrum1D works
+        # with nx, ny, nw! Note that a FITS HDU has nw, ny, nx!
+        nx, ny = cube.shape[:-1]
+        self.maps = MapCollection(self.flat_feature_names, (nx, ny))
         self.models = {}
 
-        # make many copies of model and fit them
-        nx, ny = cube.shape[:-1]
-
         if j > 1:
-            self.model.save("temp.ecsv", overwrite=True)
+            self.model.save("./temp.ecsv", overwrite=True)
             with Pool(j) as p:
                 # generates arguments for wrapper
+                #
                 args_it = (
                     dict(
                         x=x,
@@ -99,7 +121,7 @@ class CubeModel:
                         self._ingest_single_model(model_xy, args["x"], args["y"])
 
         else:
-            for x, y in product(range(nx), range(ny)):
+            for x, y in tqdm(product(range(nx), range(ny))):
                 self._fit_spaxel(cube, x, y, maxiter, checkpoint_prefix)
 
     def _ingest_single_model(self, model, x, y):
@@ -147,23 +169,14 @@ class CubeModel:
         has_nan = not all(np.isfinite(spec.flux.value))
         return too_many_zeros or has_nan
 
-    def plot_spaxel(self, cube, x, y, save_fn=None):
-        plt.figure()
+    def plot_spaxel(self, cube, x, y):
         try:
-            fig, axs = self.models[(x, y)].plot(cube[x, y])
+            fig = self.models[(x, y)].plot(cube[x, y])
+            return fig
         except ValueError as error:
             print(error)
             print(f"Skipping plot x{x}y{y} due to the above error")
-            # raise error
-            # continue
-
-        if save_fn is not None:
-            fig.savefig(save_fn)
-
-        plt.close(fig)
-
-
-# wrapper_args = [dict(x=x, y=y, cube=cube, model=model) for x, y in bla]
+            return None
 
 
 def wrapper(args):
