@@ -1,6 +1,9 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from astropy.io import fits
+from matplotlib.colors import LogNorm
+import itertools as it
+from astropy.table import Table
 
 
 class MapCollection:
@@ -26,13 +29,20 @@ class MapCollection:
                 "Available names are" + str([k for k in self.index])
             )
 
-    def plot_map(self, name):
+    def plot_map(self, name, log_color=False):
         plt.figure()
         array = self[name]
         vmin = np.amin(array)
         vmax = np.percentile(array, 99)
+        kwargs = {"origin": "lower"}
+        if log_color:
+            vmin = np.amin(array[array > 0])
+            kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            kwargs["vmin"] = vmin
+            kwargs["vmax"] = vmax
         # imshow assumes (y, x), so transpose
-        plt.imshow(self[name].T, origin="lower", vmin=vmin, vmax=vmax)
+        plt.imshow(self[name].T, **kwargs)
         plt.colorbar()
 
     def save(self, wcs, fits_fn):
@@ -44,3 +54,39 @@ class MapCollection:
             hdu = fits.ImageHDU(data=self.data[i], header=header, name=k)
             new_hdul.append(hdu)
         new_hdul.writeto(fits_fn, overwrite=True)
+
+    def save_as_table(self, fn, wcs=None, **table_write_kwargs):
+        """Save the map as an astropy table.
+
+        This way, it becomes easy to explore the data in glue or topcat
+        (e.g. figure out which part of the nebula a certaint grouping in
+        a scatter plot belongs to). The table contains one row per
+        pixel, has the following columns:
+
+        x, y, <all map values>
+
+        RA and DEC columns optional?
+
+        """
+        nx, ny = self.data.shape[1:]
+        num_rows = nx * ny
+        names = ["x", "y"] + [name for name in self.index]
+        table_data = np.zeros((num_rows, len(names)))
+
+        # x and y
+        for i, (x, y) in enumerate(it.product(range(nx), range(ny))):
+            table_data[i, 0] = x
+            table_data[i, 1] = y
+
+        # one column for every map
+        for j, map_name in enumerate(names[2:], start=2):
+            m = self[map_name]
+            for i, (x, y) in enumerate(it.product(range(nx), range(ny))):
+                table_data[i, j] = m[x, y]
+
+        # do not write row when all map values are zero
+        nonzero = np.any(table_data[:, 2:], axis=1)
+        n = np.count_nonzero(nonzero)
+        print(f"{n}/{len(nonzero)} rows are nonzero")
+        t = Table(data=table_data[nonzero], names=names)
+        t.write(fn, **table_write_kwargs)
