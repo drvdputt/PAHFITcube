@@ -80,7 +80,7 @@ class CubeModel:
         if j > 1:
             with Pool(j) as p:
                 # version with parallel Pool.imap
-                fit_loop(p.imap(wrapper, args_it))
+                fit_loop(p.imap(wrapper, args_it, chunksize=16))
 
         else:
             # version with regular loop
