@@ -29,8 +29,13 @@ class MapCollection:
                 "Available names are" + str([k for k in self.index])
             )
 
-    def plot_map(self, name, log_color=False):
-        plt.figure()
+    def plot_map(self, name, log_color=False, axes=None):
+        if axes is None:
+            plt.figure()
+            ax = plt.gca()
+        else:
+            ax = axes
+
         array = self[name]
         vmin = np.amin(array)
         vmax = np.percentile(array, 99)
@@ -42,8 +47,8 @@ class MapCollection:
             kwargs["vmin"] = vmin
             kwargs["vmax"] = vmax
         # imshow assumes (y, x), so transpose
-        plt.imshow(self[name].T, **kwargs)
-        plt.colorbar()
+        cax = ax.imshow(self[name].T, **kwargs)
+        ax.figure.colorbar(cax, ax=ax)
 
     def save(self, wcs, fits_fn):
         """Save to one (or many?) files."""
