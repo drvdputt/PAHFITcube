@@ -30,6 +30,64 @@ class MapCollection:
                 "Available names are" + str([k for k in self.index])
             )
 
+    def plot_map_collage(self, names, nrows=1, titles=None, **kwargs):
+        """
+        Plot many maps in a compact way using subplots.
+
+        The main goal is providing a quick overview of the fit results,
+        without cluttering everything with labels and numbers.
+
+        The following visualization choices are made:
+        - No color bars (the fit parameters don't always have
+          straightforward units anyway)
+        - No pixel number axis labels. If fancy plots with coordinates
+          and color bar units are required, those changes should be made
+          in the returned figure/axes.
+
+        self.plot_map is called for each panel
+
+        Parameters
+        ----------
+
+        names: list of str
+            Maps to plot. Might fail if these maps have mostly zeros.
+
+        Returns
+        -------
+        fig, axes: figure and axes created by calling plt.subplots()
+        """
+        # find the ideal number of columns
+        nplots = len(names)
+        q, r = divmod(nplots, nrows)
+        ncols = q if r == 0 else q + 1
+
+        fig, axs = plt.subplots(nrows, ncols, sharex=True, sharey=True, squeeze=False)
+        kwargs.setdefault("with_title", False)
+
+        allaxes = axs.flatten()
+
+        biggest_x = 0
+        biggest_y = 0
+        for i, (n, ax) in enumerate(zip(names, allaxes)):
+            plot_info = self.plot_map(n, axes=ax, **kwargs)
+            biggest_x = max(plot_info["image"].shape[1], biggest_x)
+            biggest_y = max(plot_info["image"].shape[0], biggest_y)
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+            if titles is not None:
+                ax.set_title(titles[i])
+
+        # because of the shared axes, any imshow command will result
+        # in the FOV of the last plot. Make sure that we use the
+        # BIGGEST plot.
+        axs[0, 0].set_xlim(0, biggest_x)
+        axs[0, 0].set_ylim(0, biggest_y)
+
+        fig.subplots_adjust(wspace=0, left=0, right=1)
+        return fig, axs
+
     def plot_map(
         self,
         name,
@@ -38,7 +96,14 @@ class MapCollection:
         with_title=True,
         rotate_angle=None,
         autocrop=False,
+        manualcrop=None,
+        colorbar=False,
     ):
+        if np.count_nonzero(self[name]) == 0:
+            raise ValueError(
+                f"Map with name {name} has all zeros and can therefore not be plotted"
+            )
+
         """Utility function dealing with the most common plotting issues"""
         if axes is None:
             plt.figure()
@@ -66,7 +131,13 @@ class MapCollection:
             # these values out by remembering the minimum nonzero data
             # value, and setting anything below that to zero in the
             # final image.
-            vmin_nonzero = np.amin(image_data[image_data > 0])
+            nonzero = image_data > 0
+            if nonzero.any():
+                vmin_nonzero = np.amin(image_data[image_data > 0])
+            else:
+                # avoid problems when everything is zero
+                vmin_nonzero = 0
+
             image_data = ndimage.rotate(image_data, rotate_angle)
             image_data[image_data < vmin_nonzero] = 0
             # remember the rotation matrix for this rotation
@@ -77,19 +148,43 @@ class MapCollection:
         else:
             rotation_matrix = np.identity(2)
 
+        # Remember the shape after rotation. Important for calculating
+        # the reverse transformation.
         center_after_rotation = np.array(image_data.T.shape) / 2
 
+        do_crop = False
         if autocrop:
-            keep_i = np.where(np.sum(np.square(image_data), axis=1) > 0)[0]
-            keep_j = np.where(np.sum(np.square(image_data), axis=0) > 0)[0]
-            image_data = image_data[keep_i[0] : keep_i[-1], keep_j[0] : keep_j[-1]]
-            # remember the translation vector caused by the cropping
-            crop_translate_xy = np.array([-keep_j[0], -keep_i[0]])
+            keep_i = np.where(np.sum(np.square(image_data), axis=1) != 0)[0]
+            keep_j = np.where(np.sum(np.square(image_data), axis=0) != 0)[0]
+            # print("keep rows", keep_i)
+            # print("keep cols", keep_j)
+            if len(keep_i) > 2 and len(keep_j) > 2:
+                min_i = keep_i[0]
+                max_i = keep_i[-1]
+                min_j = keep_j[0]
+                max_j = keep_j[-1]
+                do_crop = True
+                print("Suggested crop range: ", (min_i, max_i, min_j, max_j))
+            else:
+                print("Something weird with data! Skipping autocrop")
+        elif manualcrop:
+            min_i, max_i, min_j, max_j = (
+                manualcrop[0],
+                manualcrop[1],
+                manualcrop[2],
+                manualcrop[3],
+            )
+            do_crop = True
+
+        if do_crop:
+            image_data = image_data[min_i:max_i, min_j:max_j]
+            crop_translate_xy = np.array([-min_j, -min_i])
         else:
             crop_translate_xy = np.zeros(2)
 
         cax = ax.imshow(image_data, **kwargs)
-        ax.figure.colorbar(cax, ax=ax)
+        if colorbar:
+            ax.figure.colorbar(cax, ax=ax)
 
         if with_title:
             ax.set_title(name)
@@ -114,7 +209,8 @@ class MapCollection:
             print("back to center", final_xy)
             return final_xy
 
-        return transform_imagexy_to_mapxy
+        plot_info = dict(transform=transform_imagexy_to_mapxy, image=image_data)
+        return plot_info
 
     def save(self, wcs, fits_fn):
         """Save to one (or many?) files."""
