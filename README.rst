@@ -1,117 +1,149 @@
-PAHFIT-cube
+PAHFITcube
 ===========
 
 .. image:: http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat
     :target: http://www.astropy.org
     :alt: Powered by Astropy Badge
 
-A collection of tools for applying PAHFIT (https://github.com/PAHFIT/pahfit) to IFU data cubes, with the goal of
-producing feature maps.
+A collection of tools for applying PAHFIT (https://github.com/PAHFIT/pahfit) to IFU data cubes,
+and producing feature maps from the fit results.
 
-Functionality
--------------
+Usage
+-----
 
-In this readme, we provide a quick overview of the supported input data, the main run command,
-and the output. The full documentation can be found at readthedocs (not published yet).
+Using the ``-j <nprocs>`` option will run the fits in parallel with the given number of
+processes. Currently there’s also a basic ``--resume`` option, which skips pixels when their
+output file is already present. It loads the fit results for those pixels from the output files
+instead. To use PAHFITcube, the following things are needed.
 
-Run PAHFIT-cube
+1. Input data in the right format. The currently supported data is any data cube that can be
+   loaded as a Spectrum1D object (see specutils). If you have a cube that works with
+   ``Spectrum1D.read()``, you are good to go. Otherwise, some tips are given in the "Preparing
+   Input" section below.
+2. Settings for PAHFIT that will work for the features and resolution of the given data, i.e.
+   choosing the right instrument pack and science pack.
+3. A way to tie everything together. We suggest either:
+
+   a. Your own notebook or script that prepares these data and then uses the Python interface
+      (``pahfitcube.cube_model``)
+   b. The right input files and options for the command line script (``run_pahfitcube.py``)
+
+Python interface
+^^^^^^^^^^^^^^^^
+
+The main interface for the user is the ``CubeModel`` class. To set up a cube model, a regular
+PAHFIT model needs to be passed. This model will be used as the initial condition for the
+fitting.
+
+.. code-block::
+
+   from pahfitcube.cube_model import CubeModel
+   from pahfit.model import Model
+
+   initial_model = Model.from_saved("pahfit_output.ecsv")
+   cube_model = CubeModel(initial_model)
+
+We recommend performing a PAHFIT fit to e.g. the average SED over the cube, to obtain a suitable
+initial condition. As a reminder, PAHFIT models can be saved using
+``model.save("pahfit_output.ecsv")``. See the `PAHFIT documentation
+<https://pahfit.readthedocs.io/en/latest/fit_spectrum.html#fitting/>`_ for instruction on
+fitting.
+
+To perform the fit, the cube data need to be fed to the CubeModel. The wavelengths need to have
+the right units, as they will be converted to micron under the hood. Additionally some metadata
+needs to be set so that PAHFIT knows which instrument model to use.
+
+.. code-block::
+
+   # code that prepares your data
+   # ...
+   # package it in Spectrum1D, and set the right metadata so that it is supported by PAHFIT
+   from specutils import Spectrum1D
+   from astropy.nddata import StdDevUncertainty
+   spec = Spectrum1D(spectral_axis=..., flux=..., uncertainty=StdDevUncertainty(...))
+   spec.meta["instrument"] = "jwst.nirspec.g395.high"
+
+The fitting can then be performed by the call below. It is recommended to use the
+``checkpoint_prefix`` option, so that each fitted pixel is written to disk. This allows a cube
+model to resume fitting if interrupted, or to read a (possibly only partially fitted) model from
+storage.
+
+.. code-block::
+
+   # command that will start the fitting
+   cube_model = fit(spec, './output_dir/output_prefix', maxiter=10000, j=7)
+
+Multi-processing is supported with the ``j`` option, and can provide a large speedup considering
+that a typical PAHFIT job takes anywhere between 0.1 and 100 seconds depending on the complexity
+of the model. Currently, all pixels are fit independently, but the cube model could be sped up
+further by developing "smarter" fitting algorithms making use of cross-pixel information.
+
+Once the fitting has completed, the fit information will be stored in several places
+
+1. The fitted PAHFIT models for each pixel ``(x, y)`` can be accessed as ``cube_model.models[(x, y)]``
+2. If a directory was provided, the model for each pixel was saved to './output_dir/output_prefix_xy_...'
+3. The fit results can be written to a big table with one row per pixel, and one column per
+   parameter, using ``cube_model.maps.save_as_table("big_table.ecsv", format="ascii.ecsv")``.
+   This is ideal for pixel-vs-pixel analysis, e.g. scatter plots comparing feature strength
+   correlations.
+
+When these per-pixel results are obtained during the ``fit()`` call or while reading from disk,
+the fit parameters are collected into maps. These maps can be accessed via ``cube_model.maps``,
+which is an instance of ``MapCollection``. The latter offers a transparent way to deal with
+many maps on the same spatial grid, and several utilities for inspecting or saving them.
+
+.. code-block::
+
+   map_collection = cube_model.maps
+
+   # get a map array for a parameter
+   map_data = map_collection['PAH_15.9_powerz']
+
+   # plot a single map
+   map_collection.plot_map('PAH_15.9_power')
+
+   # plot overview of many maps
+   map_collection.plot_map_collage(['H2_O(3)_2.9_power', 'H2_O(4)_power', 'H2_O(5)_power'])
+
+   # make a WCS, and save as multi-extention fits file, which can be displayed in e.g. DS9
+   wcs = astropy.wcs.WCS(...)
+   map_collection.save(wcs, "maps.fits")
+
+
+Script
+^^^^^^
+The script ``run_pahfit_cube.py`` has the same command line arguments as the normal PAHFIT run
+script, except a data cube is given at the input instead of a single spectrum.
+
+*Things have changed recently and this script needs to be redesigned*
+
+Other Utitlies
+--------------
+
+Preparing input
 ^^^^^^^^^^^^^^^
 
-The script ``run_pahfit_cube.py`` has the same command line arguments as the normal PAHFIT run
-script, except a data cube is given at the input instead of a single spectrum. Additionally, a
-suitable science pack needs to be passed. In the example below, the default Spitzer
-extragalactic science pack (part of PAHFIT), is given.
-
-::
-
-   python run_pahfit_cube.py reprojected.fits scipack_ExGal_SpitzerIRSSLLL.ipac --fit_maxiter 50
-
-For debugging the script, it is best to set ``--fit_maxiter`` to a low number, so that
-everything goes faster. Using the ``-j <nprocs>`` option will run the fits in parallel with the
-given number of processes. Currently there’s also a basic ``--resume`` option, which skips
-pixels when their output file is already present. It loads the fit results for those pixels from
-the output files instead.
-
-Input
-^^^^^
-
-The script supports any spectral data cube that can be loaded as a Spectrum1D object by
-specutils, and from which astropy can extract a WCS.
+If multiple instruments are combined to achieve a larger wavelength coverage, the cubes should
+be merged which means
+1. Reprojecting everything onto the same spatial grid
+2. Fixing any jumps in the flux between the different parts
+3. Put the data in the right input format (package it in a Spectrum1D object).
 
 Reprojection
 ,,,,,,,,,,,,
 
-Because the field of view is often different for each IFU cube of an observation, some scripts
-to reproject data cubes are provided. These are specialized per instrument, as data formats can
-be different. These scripts use the ``reproject`` package, and write out the result as a Python
-pickle, which can also be loaded in by the run script.
+Because the field of view is often different for each IFU cube of an observation, a generic
+script that reprojects data cubes is provided: ``merge_cubes.py``. It uses the ``reproject``
+package, and writes out the result as a Python pickle, which contains the necessary ingredients
+to build a Spectrum1D object. These pickles can be loaded in by the run script.
 
 Spectral Order Stitching
 ,,,,,,,,,,,,,,,,,,,,,,,,
 
-The reprojection scripts contain a basic spectral order stitching step. For example, for Spitzer
-data cubes (LL1, LL2, SL1, SL2), the spectra are rescaled on a pixel-per-pixel basis, according
-to the average values in the wavelength overlap region. This is done in order of decreasing
-wavelength: - scale LL2 to match LL1 - scale SL1 to match LL2 - scale SL2 to match SL1
-After this step, the slices of the 4 cubes are merged and sorted by wavelength.
+Spectroscopic observations typically have jumps in the flux, between spectral orders. These need
+to be fixed before giving the spectrum to PAHFIT.
 
-Output
-^^^^^^
-
-Feature maps
-,,,,,,,,,,,,
-
-The main output is a multi-extension fits file ``reprojected_parameter_maps.fits``, with the
-same WCS as the input spectral cube. Each extension contains a map of one of the fit parameters.
-It can be viewed in DS9 when opened as a multi-extension cube.
-
-Per pixel files and resume option
-,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
-
-For every pixel, the normal PAHFIT output is written out (fit parameters
-and a plot). This is useful for diagnosing problems with individual
-pixels, and determining/recalling progress.
-
-Test data
-^^^^^^^^^
-
-The following info should be reworked, and moved to readthedocs.io.
-
-We do our experiments and testing with Spitzer IFU cubes from the
-SAGE-Spec (citation) program. From this dataset, one HII region was
-taken, for which the wavelength range from 35 ~ 5 micron is covered by 4
-IFU cubes: LL1, LL2, SL1, and SL2 (in the order from long to short
-wavelengths).
-
-If you are on the ERS-PDRs Slack space, you can look for the data there.
-Or ask me for it. The list of files should look like this
-
-::
-
-   ls -1 PAHFIT-cube/data/sage-spec_hii1_hii8_4dec08
-   hii1_hii8_ll_LL1_cube.fits
-   hii1_hii8_ll_LL1_cube_unc.fits
-   hii1_hii8_ll_LL2_cube.fits
-   hii1_hii8_ll_LL2_cube_unc.fits
-   hii1_hii8_ll_LL3_cube.fits
-   hii1_hii8_ll_LL3_cube_unc.fits
-   hii1_hii8_sl_SL1_cube.fits
-   hii1_hii8_sl_SL1_cube_unc.fits
-   hii1_hii8_sl_SL2_cube.fits
-   hii1_hii8_sl_SL2_cube_unc.fits
-   hii1_hii8_sl_SL3_cube.fits
-   hii1_hii8_sl_SL3_cube_unc.fits
-
-Because PAHFIT needs the whole wavelength range to work with, the 4
-Spitzer cubes need to be merged first. The script
-``merge_spitzer_cubes.py`` takes care this. Since this is an early test,
-it does not have command line arguments yet, so it only works for the
-data above. Simply run
-
-::
-
-   python merge_spitzer_cubes.py
-
+A generic stitching implementation might be included in the future.
 
 License
 -------
