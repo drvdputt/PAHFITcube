@@ -17,13 +17,23 @@ class MapCollection:
         shape: nx, ny
         """
         self.names = names
+        self.shape = shape
         self.data = np.zeros((len(names), *shape))
-        self.index = {name: i for i, name in enumerate(self.names)}
+        self.index = {name: i for i, name in enumerate(names)}
 
     def __getitem__(self, name):
         """Access one of the maps using [name]"""
         if name in self.names:
             return self.data[self.index[name]]
+        else:
+            raise RuntimeError(
+                f"Map of {name} not in map collection\n"
+                "Available names are" + str([k for k in self.index])
+            )
+
+    def __setitem__(self, name, value):
+        if name in self.names:
+            self.data[self.index[name]] = value
         else:
             raise RuntimeError(
                 f"Map of {name} not in map collection\n"
@@ -257,3 +267,18 @@ class MapCollection:
         print(f"{n}/{len(nonzero)} rows are nonzero")
         t = Table(data=table_data[nonzero], names=names)
         t.write(fn, **table_write_kwargs)
+
+
+def merge(mc1, mc2):
+    if mc1.shape != mc2.shape:
+        raise ValueError(
+            f"MapCollections have shapes {mc1.shape} and {mc2.shape} but should be equal"
+        )
+
+    mc_new = MapCollection([n for n in it.chain(mc1.names, mc2.names)], mc1.shape)
+    for n in mc1.names:
+        mc_new[n] = mc1[n]
+    for n in mc2.names:
+        mc_new[n] = mc2[n]
+
+    return mc_new
