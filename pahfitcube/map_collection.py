@@ -87,7 +87,7 @@ class MapCollection:
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
             if titles is not None:
-                ax.set_title(titles[i])
+                ax.set_title(titles[i], rotation=90)
 
         # because of the shared axes, any imshow command will result
         # in the FOV of the last plot. Make sure that we use the
@@ -95,6 +95,7 @@ class MapCollection:
         axs[0, 0].set_xlim(0, biggest_x)
         axs[0, 0].set_ylim(0, biggest_y)
 
+        fig.tight_layout()
         fig.subplots_adjust(wspace=0, left=0, right=1)
         return fig, axs
 
