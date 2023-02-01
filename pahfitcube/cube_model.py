@@ -8,6 +8,7 @@ from multiprocess.pool import Pool
 from tqdm import tqdm
 from pathlib import Path
 import re
+from astropy import units as u
 
 from pahfitcube.map_collection import MapCollection
 
@@ -35,6 +36,35 @@ class CubeModel:
         self.flat_feature_names = unique_feature_dict(model).keys()
         self.maps = None
         self.models = {}
+
+    @classmethod
+    def load(cls, nx, ny, prefix):
+        """Load the files already there, ignoring pixels that still need fitting.
+
+        Shape equal to the original fit must be provided for
+        consistency (hint: if you have the spectrum, use
+        *spec.shape[:2]
+
+        """
+        # list all files matching the prefix
+        files = sorted(str(p) for p in Path(".").glob(prefix + "_xy_*.ecsv"))
+
+        # set up based on first file
+        model0 = Model.from_saved(files[0])
+        instance = cls(model0)
+        instance.maps = MapCollection(instance.flat_feature_names, (nx, ny))
+
+        # ingest all models
+        for fn in tqdm(files):
+            model = Model.from_saved(fn)
+            # determine x and y based on file name (TODO: put this in
+            # the meta of the saved table)
+            m = re.match(f"{prefix}_xy_([0-9]+)_([0-9]+).*?", fn)
+            x = int(m[1])
+            y = int(m[2])
+            instance._ingest_single_model(model, x, y)
+
+        return instance
 
     def fit(self, cube: Spectrum1D, checkpoint_prefix=None, maxiter=1000, j=1):
         """Fit the same PAHFIT model to each spaxel of a given cube.
@@ -85,35 +115,6 @@ class CubeModel:
         else:
             # version with regular loop
             fit_loop((wrapper(args) for args in args_it))
-
-    @classmethod
-    def load(cls, nx, ny, prefix):
-        """Load the files already there, ignoring pixels that still need fitting.
-
-        Shape equal to the original fit must be provided for
-        consistency (hint: if you have the spectrum, use
-        *spec.shape[:2]
-
-        """
-        # list all files matching the prefix
-        files = sorted(str(p) for p in Path(".").glob(prefix + "_xy_*.ecsv"))
-
-        # set up based on first file
-        model0 = Model.from_saved(files[0])
-        instance = cls(model0)
-        instance.maps = MapCollection(instance.flat_feature_names, (nx, ny))
-
-        # ingest all models
-        for fn in tqdm(files):
-            model = Model.from_saved(fn)
-            # determine x and y based on file name (TODO: put this in
-            # the meta of the saved table)
-            m = re.match(f"{prefix}_xy_([0-9]+)_([0-9]+).*?", fn)
-            x = int(m[1])
-            y = int(m[2])
-            instance._ingest_single_model(model, x, y)
-
-        return instance
 
     def _ingest_single_model(self, model, x, y):
         # print("ingesting result")
