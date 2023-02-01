@@ -202,7 +202,7 @@ def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix):
             # model_xy = Modelmodel.copy()
             model_xy = Model(model.features.copy())
             try:
-                model_xy.fit(spec, maxiter=maxiter)
+                model_xy.fit(spec, maxiter=maxiter, verbose=False)
             except TypeError as e:
                 print(f"caught {e} in cube_model fit")
                 print("x, y = ", (x, y))
