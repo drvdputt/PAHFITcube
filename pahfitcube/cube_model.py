@@ -125,13 +125,48 @@ class CubeModel:
                 self.maps[k][x, y] = v
 
     def plot_spaxel(self, cube, x, y):
-        try:
+        # try:
             fig = self.models[(x, y)].plot(cube[x, y])
             return fig
-        except ValueError as error:
-            print(error)
-            print(f"Skipping plot x{x}y{y} due to the above error")
-            return None
+        # except ValueError as error:
+        #     print(error)
+        #     print(f"Skipping plot x{x}y{y} due to the above error")
+        #     return None
+
+    def make_derived_maps(self, inst, z, dust_cont_wavelength):
+        """Generate a number of specialty maps.
+
+        Some examples
+        - AIB: sum of all the dust features
+        - dust_continuum: sum of all dust continua
+
+        Parameters
+        ----------
+
+        spec : Spectrum1D
+            the spectral data is needed because we need the
+            instrument and the redshift to evaluate the model
+            function...
+
+        dust_cont_wavelength : Quantity
+            wavelength at which the dust continuum should be evaluated
+
+        Returns
+        -------
+
+        MapCollection
+
+        """
+        mc = MapCollection(["dust_continuum"], shape=self.maps.shape)
+
+        for (x, y), model in self.models.items():
+            dust_continuum_function = model.sub_model(inst, z, kind="dust_continuum")
+            dust_continuum_value = dust_continuum_function(
+                dust_cont_wavelength.to(u.micron).value
+            )
+            mc["dust_continuum"][x, y] = dust_continuum_value
+
+        return mc
 
 
 def _skip(spec):
