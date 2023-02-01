@@ -3,7 +3,6 @@ from astropy.wcs.utils import proj_plane_pixel_area
 from specutils import Spectrum1D
 from astropy.wcs import WCS
 from astropy import units as u
-from matplotlib import pyplot
 from astropy.nddata import StdDevUncertainty
 
 
@@ -82,15 +81,16 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
     # use wcs and shape to make mask
     array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
 
-    # broadcast the mask over the slices and multiply
-    masked_cube = array_mask[:, :, None] * cube_spec1d.data
+    # broadcast the mask over the slices and multiply (and turn the data
+    # in to a masked cube to avoid problems with nan)
+    masked_cube = array_mask[:, :, None] * np.ma.masked_invalid(cube_spec1d.data)
 
     # Add units again, and convert to MJy
     area = (proj_plane_pixel_area(wcs_2d) * u.deg**2).to(u.sr)
     masked_cube = masked_cube * cube_spec1d.flux.unit * area
 
     # do the same for uncertainty
-    masked_unc = array_mask[:, :, None] * cube_spec1d.uncertainty.array
+    masked_unc = array_mask[:, :, None] * np.ma.masked_invalid(cube_spec1d.uncertainty.array)
     masked_unc = masked_unc * cube_spec1d.flux.unit * area
 
     # collapse
