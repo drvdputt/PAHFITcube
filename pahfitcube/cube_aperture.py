@@ -47,6 +47,9 @@ def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
 
     if image_mask is None:
         print("Something wrong with make overlap!")
+        print("sky aperture = ", sky_aperture)
+        print("pixel aperture = ", pixel)
+        print("WCS = ", wcs_2d)
 
     array_mask = image_mask.T
     return array_mask
