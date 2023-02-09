@@ -34,8 +34,11 @@ def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
         array_mask: np.array of shape shape_2d.
 
     """
-    # use wcs to make pixel mask
-    pixel_mask = sky_aperture.to_pixel(wcs_2d).to_mask(method="exact")
+    try:
+        pixel = sky_aperture.to_pixel(wcs_2d)
+    except ValueError as e:
+        raise ValueError("Aperture to_pixel failed. Probably because aperture is not inside FOV of WCS") from e
+    pixel_mask = pixel.to_mask(method="exact")
 
     # watch out here! To_image works in y,x coordinates! Need to provide
     # shape as (y,x), and then convert the image mask to a mask that
