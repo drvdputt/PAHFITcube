@@ -64,7 +64,7 @@ def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture):
     ax2.imshow(array_mask.T, origin='lower')
 
 
-def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
+def cube_sky_aperture_extraction(cube_spec1d, sky_aperture, average_per_sr=True):
     """Extract a 1D spectrum from a cube using an aperture over all the slices.
 
     Parameters
@@ -103,6 +103,12 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture):
     spectrum = np.sum(masked_cube, axis=(0, 1))
     # collapse the uncertainty. Variances = (mask value * sigma) **2
     sigmas = np.sqrt(np.sum(np.square(masked_unc), axis=(0, 1)))
+
+    if average_per_sr:
+        # total area of the unmasked pixels
+        masked_area = area * np.count_nonzero(array_mask)
+        spectrum /= masked_area
+        sigmas /= masked_area
 
     # make a spectrum1d object for convenience
     s1d = Spectrum1D(
