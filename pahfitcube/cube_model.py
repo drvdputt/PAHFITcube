@@ -173,8 +173,8 @@ class CubeModel:
 def _skip(spec):
     num_wav = len(spec.wavelength)
     too_many_zeros = np.count_nonzero(spec.flux.value <= 0) > 0.2 * num_wav
-    has_nan = not all(np.isfinite(spec.flux.value))
-    return too_many_zeros or has_nan
+    too_many_nan = np.count_nonzero(~np.isfinite(spec.flux.value)) > 0.2 * num_wav
+    return too_many_zeros or too_many_nan
 
 
 def _fn(x, y, checkpoint_prefix):
