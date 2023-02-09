@@ -243,7 +243,8 @@ class MapCollection:
 
         x, y, <all map values>
 
-        RA and DEC columns optional?
+        RA and DEC columns optional by providing spatial wcs (not
+        implemented yet)
 
         """
         nx, ny = self.data.shape[1:]
