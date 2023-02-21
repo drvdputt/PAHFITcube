@@ -9,12 +9,12 @@ available somewhere).
 import numpy as np
 from pathlib import Path
 import argparse
-import wcshacks
 from specutils import Spectrum1D
 from astropy import units as u
 from astropy.wcs import WCS
 from multiprocess import Pool
 
+from pahfitcube import wcshacks
 
 def main():
     ap = argparse.ArgumentParser()
@@ -63,6 +63,24 @@ def main():
 
 
 def rpj_all(specs, newwcs, ny, nx):
+    """Parallel loop that reprojects cubes onto the same grid
+
+    Parameters
+    ----------
+
+    specs: list of Spectrum1D cubes
+
+    newwcs: wcs on which to reproject the cubes
+
+    ny, nx: spatial dimensions of the new flux array
+
+    Returns
+    -------
+
+    rpj_data: list of arrays
+        Reprojected flux arrays. Wavelength axis is still the same.
+
+    """
     with Pool(8) as p:
         rpj_data = p.starmap(
             wcshacks.reproject_cube_data,
