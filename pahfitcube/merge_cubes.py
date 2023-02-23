@@ -11,17 +11,18 @@ from pathlib import Path
 import argparse
 from specutils import Spectrum1D
 from astropy import units as u
-from astropy.wcs import WCS
-from multiprocess import Pool
 
 from pahfitcube import wcshacks
+
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fov_ra_dec", help="field of view in arcsec", type=float, nargs=2)
     ap.add_argument("--format", help="format for Spectrum1D.read()")
     ap.add_argument("-o", help="output directory")
-    ap.add_argument("--res", type=float, default=0.1, help="pixel scale in arcsec (default 0.1)")
+    ap.add_argument(
+        "--res", type=float, default=0.1, help="pixel scale in arcsec (default 0.1)"
+    )
     ap.add_argument("cubes", nargs="+", type=str)
     args = ap.parse_args()
     output_dir = Path(args.o)
@@ -34,20 +35,21 @@ def main():
     newwcs, ny, nx = wcshacks.make_reasonable_wcs(specs, args.fov_ra_dec, args.res)
 
     # reproject the data
-    rpj_arrays = rpj_all(specs, newwcs, ny, nx)
+    rpj_specs = rpj_all(specs, newwcs, ny, nx)
 
     # merge into one big cube
     output_wavs, output_cube_array = merge_wav_and_data_arrays(
-        [s.spectral_axis.to(u.micron).value for s in specs], rpj_arrays
+        [s.spectral_axis.to(u.micron).value for s in rpj_specs],
+        [s.flux.value for s in rpj_specs],
     )
 
     # save individual reprojected cubes
-    for i, new_data in enumerate(rpj_arrays):
+    for i, s in enumerate(rpj_specs):
         rpj_fn = "rpj" + Path(args.cubes[i]).name
         wcshacks.write_cube(
             output_dir / rpj_fn,
-            new_data,
-            specs[i].spectral_axis.to(u.micron).value,
+            s.flux.value,
+            s.spectral_axis.to(u.micron).value,
             newwcs,
             spectral_axis=-1,
         )
@@ -62,12 +64,11 @@ def main():
     )
 
 
-def rpj_all(specs, newwcs, ny, nx):
+def rpj_all(specs, newwcs, nx, ny):
     """Parallel loop that reprojects cubes onto the same grid
 
     Parameters
     ----------
-
     specs: list of Spectrum1D cubes
 
     newwcs: wcs on which to reproject the cubes
@@ -77,19 +78,14 @@ def rpj_all(specs, newwcs, ny, nx):
     Returns
     -------
 
-    rpj_data: list of arrays
-        Reprojected flux arrays. Wavelength axis is still the same.
+    rpj_specs: list of Spectrum1D
+        Reprojected Spectrum1D objects. Flux and uncertainty have been
+        changed, Wavelength axis is still the same. Metadata is copied
+        over, and the celestial WCS in the metadata has been adjusted.
 
     """
-    with Pool(8) as p:
-        rpj_data = p.starmap(
-            wcshacks.reproject_cube_data,
-            [
-                (s.data, WCS(s.meta["header"]).sub((1, 2)), newwcs, ny, nx)
-                for s in specs
-            ],
-        )
-    return rpj_data
+    rpj_specs = [wcshacks.reproject_s1d(s3d, newwcs, nx, ny) for s3d in specs]
+    return rpj_specs
 
 
 def merge_wav_and_data_arrays(wavs_list, rpj_data_list):

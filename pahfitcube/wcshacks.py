@@ -7,7 +7,9 @@ from pathlib import Path
 from astropy.io import fits
 from astropy.table import Table
 import pickle
-
+from astropy.nddata import StdDevUncertainty
+from specutils import Spectrum1D
+from multiprocess import Pool
 
 def cube_wcs_extent(wcs, shape):
     """Get center and four corners"""
@@ -97,26 +99,75 @@ def make_square_aperture_grid(
     return SkyRectangularAperture(positions, size, size)
 
 
-def reproject_cube_data(cube_data, cube_wcs, wcs, ny, nx):
-    """Reproject every slice of cube onto wcs using ny, nx grid
+def reproject_cube_data(cube_data, cube_wcs, wcs, n0, n1):
+    """Reproject every slice of cube onto wcs using n0, n1 grid
 
     This function assumes the spectrum1D convention of putting the
     wavelength index last.
 
+    The two spatial dimensions are axis 0 and axis 1
+
     Returns
     -------
-    output_array: np.ndarray indexed on wavelength, y, x
+    output_array: np.ndarray indexed on axis 0, axis 1, wavelength
 
     """
     num_wavs = cube_data.shape[-1]
-    output_array = np.zeros((ny, nx, num_wavs))
+    output_array = np.zeros((n0, n1, num_wavs))
     for w in range(num_wavs):
         output_array[..., w], footprint = reproject.reproject_adaptive(
             input_data=(cube_data[..., w], cube_wcs),
             output_projection=wcs,
-            shape_out=(ny, nx),
+            shape_out=(n0, n1),
         )
     return output_array
+
+def celestial_wcs_from_s1d(s):
+    """s: Spectrum1D with 3D wcs in meta['header']"""
+    return WCS(s.meta["header"]).sub((1, 2))
+    
+
+def reproject_s1d(s3d, wcs, nx, ny):
+    """Reproject every slice of Spectrum1D cube onto wcs using ny, nx grid
+
+    Reprojects both flux and uncertainty, and creates new Spectrum1D object. Metadata is copied over.
+
+    Returns
+    -------
+    new_s3d: new Spectrum1D object
+    """
+    old_wcs = celestial_wcs_from_s1d(s3d)
+    rpj_flux = reproject_cube_data(s3d.flux.value, old_wcs, wcs, nx, ny)
+
+    if s3d.uncertainty is not None:
+        rpj_unc = StdDevUncertainty(reproject_cube_data(s3d.uncertainty.array, old_wcs, wcs, nx, ny))
+    else:
+        rpj_unc = None
+
+    new_s3d = Spectrum1D(rpj_flux * s3d.flux.unit, s3d.spectral_axis, uncertainty=rpj_unc, meta=s3d.meta)
+    add_celestial_wcs_to_s1d(new_s3d, wcs)
+    return new_s3d
+
+# def reproject_s1d_multi(s3ds, wcs, nx, ny):
+#     """Parallel version, since this is quite slow"""
+#     args = ((s.flux.value, celestial_wcs_from_s1d(s), ny, nx) for s in s3ds)
+#     with Pool(8) as p:
+#         rpj_data = p.starmap(
+#             reproject_cube_data,
+#             [
+#                 (s.data, WCS(s.meta["header"]).sub((1, 2)), newwcs, ny, nx)
+#                 for s in specs
+#             ],
+#         )
+
+#     rpj_fluxes = Pool
+
+    
+def add_celestial_wcs_to_s1d(s3d, wcs2d):
+    """Add 2D wcs header to Spectrum1D.meta['header']"""
+    spatial_header = wcs2d.to_header()
+    for key in spatial_header:
+        s3d.meta["header"][key] = spatial_header[key]
 
 
 def write_wavetab_cube(fn, cube_data, wave, spatial_wcs, wav_axis_index=-1):
