@@ -85,7 +85,8 @@ class CubeModel:
         nx, ny = cube.shape[:-1]
         self.maps = MapCollection(self.flat_feature_names, (nx, ny))
 
-        # argument generator
+        # argument generator. Need to unwrap a lot of things to avoid
+        # unpicklable things.
         args_it = (
             dict(
                 x=x,
@@ -96,7 +97,9 @@ class CubeModel:
                 spectral_axis=cube.spectral_axis,
                 flux=cube.flux[x, y],
                 uncertainty=cube.uncertainty[x, y],
-                meta=cube.meta,
+                # meta can contain unpicklable things, so unpack the necessary parts here
+                instrument=cube.meta['instrument'],
+                header=cube.meta['header']
             )
             for x, y in product(range(nx), range(ny))
         )
@@ -219,6 +222,30 @@ def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix):
 
 
 def wrapper(args):
+    """Call to the fit function, compatible with pickling.
+
+    Should pack the following in to args:
+
+    "x": int
+
+    "y": int
+
+    "model": the pahfit Model
+
+    "checkpoint_prefix": str
+
+    "maxiter": int
+
+    "flux": array
+
+    "uncertainty": StdDevUncertainty
+
+    "instrument": str
+        The contents of spec.meta["instrument"]
+
+    "header": ?
+        The contents of spec.meta["header"]
+    """
     x = args["x"]
     y = args["y"]
     model = args["model"]
@@ -231,6 +258,6 @@ def wrapper(args):
     flux = args["flux"]
     uncertainty = args["uncertainty"]
     spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
-    spec.meta = args["meta"]
+    spec.meta = {k: args[k] for k in ('header', 'instrument')}
 
     return x, y, _load_fit_save(x, y, spec, model, maxiter, checkpoint_prefix)
