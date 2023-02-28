@@ -98,8 +98,8 @@ class CubeModel:
                 flux=cube.flux[x, y],
                 uncertainty=cube.uncertainty[x, y],
                 # meta can contain unpicklable things, so unpack the necessary parts here
-                instrument=cube.meta['instrument'],
-                header=cube.meta['header']
+                instrument=cube.meta["instrument"],
+                header=cube.meta["header"],
             )
             for x, y in product(range(nx), range(ny))
         )
@@ -128,10 +128,20 @@ class CubeModel:
             for k, v in flat_result.items():
                 self.maps[k][x, y] = v
 
-    def plot_spaxel(self, cube, x, y):
+    def plot_spaxel(self, cube, x, y, **kwargs):
+        """Default PAHFIT plot for one of the spaxels
+
+        cube : the spectrum to show
+
+        x, y : the xy coordinates in the cube / cube model. Should be
+            consistent with what was passed to fit()
+
+        kwargs : options passed to pahfit.model.Model.plot()
+
+        """
         # try:
-            fig = self.models[(x, y)].plot(cube[x, y])
-            return fig
+        fig = self.models[(x, y)].plot(cube[x, y], **kwargs)
+        return fig
         # except ValueError as error:
         #     print(error)
         #     print(f"Skipping plot x{x}y{y} due to the above error")
@@ -258,6 +268,6 @@ def wrapper(args):
     flux = args["flux"]
     uncertainty = args["uncertainty"]
     spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
-    spec.meta = {k: args[k] for k in ('header', 'instrument')}
+    spec.meta = {k: args[k] for k in ("header", "instrument")}
 
     return x, y, _load_fit_save(x, y, spec, model, maxiter, checkpoint_prefix)
