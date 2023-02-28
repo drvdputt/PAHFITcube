@@ -40,7 +40,7 @@ class MapCollection:
                 "Available names are" + str([k for k in self.index])
             )
 
-    def plot_map_collage(self, names, nrows=1, titles=None, **kwargs):
+    def plot_map_collage(self, names, nrows=1, titles=None, colorbar=False, **kwargs):
         """
         Plot many maps in a compact way using subplots.
 
@@ -62,6 +62,17 @@ class MapCollection:
         names: list of str
             Maps to plot. Might fail if these maps have mostly zeros.
 
+        nrows: int
+            How many rows to use. Might be useful for many plots
+
+        titles: list of str
+            Title for each panel, to make it clear what each panel means.
+
+        colorbar: bool
+            Add a colorbar. WARNING: will use values of the last plot.
+            To ensure the colorbar numbers are correct, use kwargs to
+            set the rescale or (TODO) vmin/vmax options for plot_map().
+
         Returns
         -------
         fig, axes: figure and axes created by calling plt.subplots()
@@ -78,8 +89,10 @@ class MapCollection:
 
         biggest_x = 0
         biggest_y = 0
+        ims = []
         for i, (n, ax) in enumerate(zip(names, allaxes)):
             plot_info = self.plot_map(n, axes=ax, **kwargs)
+            ims.append(plot_info["imshow_return"])
             biggest_x = max(plot_info["image"].shape[1], biggest_x)
             biggest_y = max(plot_info["image"].shape[0], biggest_y)
             ax.set_xlabel("")
@@ -97,6 +110,10 @@ class MapCollection:
 
         fig.tight_layout()
         fig.subplots_adjust(wspace=0, left=0, right=1)
+        if colorbar:
+            cax = axs[-1, -1].inset_axes([1.04, 0.2, 0.05, 0.6])
+            fig.colorbar(ims[-1], ax=axs[-1, -1], cax=cax)
+
         return fig, axs
 
     def plot_map(
@@ -109,7 +126,12 @@ class MapCollection:
         autocrop=False,
         manualcrop=None,
         colorbar=False,
+        rescale=False,
     ):
+        """
+        rescale: bool
+           Rescale the range of the quantities shown to pmin, pmax percentiles
+        """
         if np.count_nonzero(self[name]) == 0:
             raise ValueError(
                 f"Map with name {name} has all zeros and can therefore not be plotted"
@@ -122,10 +144,22 @@ class MapCollection:
         else:
             ax = axes
 
-        map_data = self[name]
-        vmin = np.amin(map_data)
-        vmax = np.percentile(map_data, 99)
+        map_data = self[name].copy()
+
+        pmin = 1
+        pmax = 99
+        vmin = np.nanpercentile(map_data, pmin)
+        vmax = np.nanpercentile(map_data, pmax)
         kwargs = {"origin": "lower"}
+
+        if rescale:
+            # map (vmin vmax) to (0 1)
+            map_data = (map_data - vmin) / (vmax - vmin)
+            # now map (0 1) to (pmin pmax)
+            map_data = (1 - map_data) * pmin + map_data * pmax
+            vmin = pmin
+            vmax = pmax
+
         if log_color:
             vmin = np.amin(map_data[map_data > 0])
             kwargs["norm"] = LogNorm(vmin=vmin, vmax=vmax)
@@ -134,7 +168,7 @@ class MapCollection:
             kwargs["vmax"] = vmax
 
         # imshow assumes (y, x), so transpose
-        image_data = self[name].T
+        image_data = map_data.T
         # rotate if requested
         if rotate_angle is not None:
             # rotating causes some artifacts with very small nonzero
@@ -193,9 +227,10 @@ class MapCollection:
         else:
             crop_translate_xy = np.zeros(2)
 
-        cax = ax.imshow(image_data, **kwargs)
+        im = ax.imshow(image_data, **kwargs)
         if colorbar:
-            ax.figure.colorbar(cax, ax=ax)
+            cax = ax.inset_axes([1.04, 0.2, 0.05, 0.6])
+            ax.figure.colorbar(im, ax=ax, cax=cax)
 
         if with_title:
             ax.set_title(name)
@@ -220,7 +255,9 @@ class MapCollection:
             print("back to center", final_xy)
             return final_xy
 
-        plot_info = dict(transform=transform_imagexy_to_mapxy, image=image_data)
+        plot_info = dict(
+            transform=transform_imagexy_to_mapxy, image=image_data, imshow_return=im
+        )
         return plot_info
 
     def save(self, wcs, fits_fn):
