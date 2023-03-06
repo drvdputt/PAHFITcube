@@ -269,6 +269,12 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     wavs: array (no unit!)
         wavelengths in micron
 
+    spatial_wcs: wcs for the celestial axes. Typically
+        WCS(header).celestial for most cube fits files.
+
+    spectra_axis: int
+        if spectral axis is not last axis, indicate the right axis here.
+
     """
     if isinstance(fn, Path):
         path = fn
