@@ -275,7 +275,9 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     else:
         path = Path(fn)
 
-    write_wavetab_cube(fn, data, wavs, spatial_wcs, spectral_axis)
+    write_wavetab_cube(
+        fn, data, wavs, spatial_wcs, -1 if spectral_axis is None else spectral_axis
+    )
 
     # Ideally, I want to make a Spectrum1D, and save it as a fits file
     # that readable by both DS9 and Spectrum1D.read(). But that doesn't
@@ -288,7 +290,7 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
         spec1d_flux_array = data
 
     # MJy/sr
-    spec1d_flux_array_with_units = spec1d_flux_array * 1e6 * u.Jy / u.sr
+    spec1d_flux_array_with_units = spec1d_flux_array * u.MJy / u.sr
 
     pickle_path = path.with_suffix(".pickle")
     with open(pickle_path, "wb") as f:
