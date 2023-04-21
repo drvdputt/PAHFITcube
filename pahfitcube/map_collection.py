@@ -197,7 +197,7 @@ class MapCollection:
         # the reverse transformation.
         center_after_rotation = np.array(image_data.T.shape) / 2
 
-        do_crop = False
+        cropped = False
         if autocrop:
             keep_i = np.where(np.sum(np.square(image_data), axis=1) != 0)[0]
             keep_j = np.where(np.sum(np.square(image_data), axis=0) != 0)[0]
@@ -208,7 +208,7 @@ class MapCollection:
                 max_i = keep_i[-1]
                 min_j = keep_j[0]
                 max_j = keep_j[-1]
-                do_crop = True
+                cropped = True
                 print("Suggested crop range: ", (min_i, max_i, min_j, max_j))
             else:
                 print("Something weird with data! Skipping autocrop")
@@ -219,9 +219,9 @@ class MapCollection:
                 manualcrop[2],
                 manualcrop[3],
             )
-            do_crop = True
+            cropped = True
 
-        if do_crop:
+        if cropped:
             image_data = image_data[min_i:max_i, min_j:max_j]
             crop_translate_xy = np.array([-min_j, -min_i])
         else:
