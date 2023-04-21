@@ -37,7 +37,9 @@ def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
     try:
         pixel = sky_aperture.to_pixel(wcs_2d)
     except ValueError as e:
-        raise ValueError("Aperture to_pixel failed. Probably because aperture is not inside FOV of WCS") from e
+        raise ValueError(
+            "Aperture to_pixel failed. Probably because aperture is not inside FOV of WCS"
+        ) from e
     pixel_mask = pixel.to_mask(method="exact")
 
     # watch out here! To_image works in y,x coordinates! Need to provide
@@ -58,10 +60,12 @@ def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
 def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture):
     wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
     array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
-    example_image = cube_spec1d.flux.value[:, :, cube_spec1d.shape[2] // 2] * (1 + array_mask)
-    sky_aperture.to_pixel(wcs_2d).plot(ax1, color='red')
-    ax1.imshow(np.log10(example_image).T, origin='lower')
-    ax2.imshow(array_mask.T, origin='lower')
+    example_image = cube_spec1d.flux.value[:, :, cube_spec1d.shape[2] // 2] * (
+        1 + array_mask
+    )
+    sky_aperture.to_pixel(wcs_2d).plot(ax1, color="red")
+    ax1.imshow(np.log10(example_image).T, origin="lower")
+    ax2.imshow(array_mask.T, origin="lower")
 
 
 def cube_sky_aperture_extraction(cube_spec1d, sky_aperture, average_per_sr=True):
@@ -96,7 +100,9 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture, average_per_sr=True)
     masked_cube = masked_cube * cube_spec1d.flux.unit * area
 
     # do the same for uncertainty
-    masked_unc = array_mask[:, :, None] * np.ma.masked_invalid(cube_spec1d.uncertainty.array)
+    masked_unc = array_mask[:, :, None] * np.ma.masked_invalid(
+        cube_spec1d.uncertainty.array
+    )
     masked_unc = masked_unc * cube_spec1d.flux.unit * area
 
     # collapse
@@ -105,8 +111,10 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture, average_per_sr=True)
     sigmas = np.sqrt(np.sum(np.square(masked_unc), axis=(0, 1)))
 
     if average_per_sr:
-        # total area of the unmasked pixels
-        masked_area = area * np.count_nonzero(array_mask)
+        # total area of the unmasked pixels. Note that array_mask is
+        # generally 0 or 1, but at the edges, there can be fractional
+        # values.
+        masked_area = area * np.sum(array_mask)
         spectrum /= masked_area
         sigmas /= masked_area
 
@@ -114,6 +122,6 @@ def cube_sky_aperture_extraction(cube_spec1d, sky_aperture, average_per_sr=True)
     s1d = Spectrum1D(
         spectral_axis=cube_spec1d.spectral_axis,
         flux=spectrum,
-        uncertainty=StdDevUncertainty(sigmas)
+        uncertainty=StdDevUncertainty(sigmas),
     )
     return s1d
