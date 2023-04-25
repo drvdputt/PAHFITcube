@@ -8,7 +8,7 @@ from multiprocess.pool import Pool
 from tqdm import tqdm
 from pathlib import Path
 import re
-from astropy import units as u
+# from astropy import units as u
 
 from pahfitcube.map_collection import MapCollection
 
@@ -174,10 +174,8 @@ class CubeModel:
         mc = MapCollection(["dust_continuum"], shape=self.maps.shape)
 
         for (x, y), model in self.models.items():
-            dust_continuum_function = model.sub_model(inst, z, kind="dust_continuum")
-            dust_continuum_value = dust_continuum_function(
-                dust_cont_wavelength.to(u.micron).value
-            )
+            tab_spec = model.tabulate(inst, z, [dust_cont_wavelength], feature_mask=model.features['kind'] == 'dust_continuum')
+            dust_continuum_value = tab_spec.flux[0].value
             mc["dust_continuum"][x, y] = dust_continuum_value
 
         return mc
