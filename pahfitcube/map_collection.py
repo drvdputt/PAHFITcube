@@ -260,13 +260,29 @@ class MapCollection:
         )
         return plot_info
 
-    def save(self, wcs, fits_fn):
-        """Save to one (or many?) files."""
+    def save(self, wcs, fits_fn, transpose=False):
+        """Save to one (or many?) files.
+
+        Parameters
+        ----------
+
+        wcs : WCS
+            celestial WCS that matches the last two dimensions of the data shape
+
+        fits_fn : str
+            file name ending in ".fits"
+
+        transpose : bool
+            Swap the spatial dimensions of the data. Use when the WCS
+            has the y direction as axis 0, and the x direction as axis
+            1.
+        """
         header = wcs.to_header()
         new_hdul = fits.HDUList()
-        for k in self.index:
-            i = self.index[k]
-            hdu = fits.ImageHDU(data=self.data[i], header=header, name=k)
+        for k, i in self.index.items():
+            data_slice = self.data[i]
+            image_array = data_slice.T if transpose else data_slice
+            hdu = fits.ImageHDU(data=image_array, header=header, name=k)
             new_hdul.append(hdu)
         new_hdul.writeto(fits_fn, overwrite=True)
 
