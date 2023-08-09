@@ -266,6 +266,6 @@ def wrapper(args):
     flux = args["flux"]
     uncertainty = args["uncertainty"]
     spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
-    spec.meta = {k: args[k] for k in ("header", "instrument")}
+    spec.meta = {k: args[k] for k in ("header", "instrument") if k in args}
 
     return x, y, _load_fit_save(x, y, spec, model, maxiter, checkpoint_prefix)
