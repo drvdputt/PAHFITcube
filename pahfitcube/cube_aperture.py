@@ -96,29 +96,35 @@ def cube_sky_aperture_extraction(
 
     """
     # make 2D wcs of cube
-    wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
+    if wcs_2d is None:
+        the_wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
+    else:
+        the_wcs_2d = wcs_2d
 
     # use wcs and shape to make mask
-    array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
+    array_mask = make_cube_array_mask(the_wcs_2d, cube_spec1d.shape[:2], sky_aperture)
 
     # broadcast the mask over the slices and multiply (and turn the data
     # in to a masked cube to avoid problems with nan)
     masked_cube = array_mask[:, :, None] * np.ma.masked_invalid(cube_spec1d.data)
 
     # Add units again, and convert to MJy
-    area = (proj_plane_pixel_area(wcs_2d) * u.deg**2).to(u.sr)
+    area = (proj_plane_pixel_area(the_wcs_2d) * u.deg**2).to(u.sr)
     masked_cube = masked_cube * cube_spec1d.flux.unit * area
-
-    # do the same for uncertainty
-    masked_unc = array_mask[:, :, None] * np.ma.masked_invalid(
-        cube_spec1d.uncertainty.array
-    )
-    masked_unc = masked_unc * cube_spec1d.flux.unit * area
 
     # collapse
     spectrum = np.sum(masked_cube, axis=(0, 1))
-    # collapse the uncertainty. Variances = (mask value * sigma) **2
-    sigmas = np.sqrt(np.sum(np.square(masked_unc), axis=(0, 1)))
+
+    # do the same for uncertainty
+    if cube_spec1d.uncertainty is not None:
+        masked_unc = array_mask[:, :, None] * np.ma.masked_invalid(
+            cube_spec1d.uncertainty.array
+        )
+        masked_unc = masked_unc * cube_spec1d.flux.unit * area
+        # collapse the uncertainty. Variances = (mask value * sigma) **2
+        sigmas = np.sqrt(np.sum(np.square(masked_unc), axis=(0, 1)))
+    else:
+        sigmas = None
 
     if average_per_sr:
         # total area of the unmasked pixels. Note that array_mask is
@@ -126,12 +132,13 @@ def cube_sky_aperture_extraction(
         # values.
         masked_area = area * np.sum(array_mask)
         spectrum /= masked_area
-        sigmas /= masked_area
+        if sigmas is not None:
+            sigmas /= masked_area
 
     # make a spectrum1d object for convenience
     s1d = Spectrum1D(
         spectral_axis=cube_spec1d.spectral_axis,
         flux=spectrum,
-        uncertainty=StdDevUncertainty(sigmas),
+        uncertainty=StdDevUncertainty(sigmas) if sigmas is not None else None,
     )
     return s1d
