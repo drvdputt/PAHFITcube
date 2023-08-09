@@ -57,18 +57,28 @@ def make_cube_array_mask(wcs_2d, shape_2d, sky_aperture):
     return array_mask
 
 
-def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture):
-    wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
-    array_mask = make_cube_array_mask(wcs_2d, cube_spec1d.shape[:2], sky_aperture)
+def cube_sky_aperture_plot(ax1, ax2, cube_spec1d, sky_aperture, wcs_2d=None):
+    """Plot aperture on top of cube slice
+
+    For the background image, the middle slice of the cube is used
+    (along the wavelength direction)"""
+    if wcs_2d is None:
+        the_wcs_2d = wcs_from_spec1d(cube_spec1d).celestial
+    else:
+        the_wcs_2d = wcs_2d
+
+    array_mask = make_cube_array_mask(the_wcs_2d, cube_spec1d.shape[:2], sky_aperture)
     example_image = cube_spec1d.flux.value[:, :, cube_spec1d.shape[2] // 2] * (
         1 + array_mask
     )
-    sky_aperture.to_pixel(wcs_2d).plot(ax1, color="red")
+    sky_aperture.to_pixel(the_wcs_2d).plot(ax1, color="red")
     ax1.imshow(np.log10(example_image).T, origin="lower")
     ax2.imshow(array_mask.T, origin="lower")
 
 
-def cube_sky_aperture_extraction(cube_spec1d, sky_aperture, average_per_sr=True):
+def cube_sky_aperture_extraction(
+    cube_spec1d, sky_aperture, average_per_sr=True, wcs_2d=None
+):
     """Extract a 1D spectrum from a cube using an aperture over all the slices.
 
     Parameters
