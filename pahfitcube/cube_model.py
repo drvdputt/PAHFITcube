@@ -97,9 +97,10 @@ class CubeModel:
                 spectral_axis=cube.spectral_axis,
                 flux=cube.flux[x, y],
                 uncertainty=cube.uncertainty[x, y],
+                mask=cube.mask[x, y],
                 # meta can contain unpicklable things, so unpack the necessary parts here
                 instrument=cube.meta["instrument"],
-                header=cube.meta["header"],
+                # header=cube.meta["header"] if "header" in cube.meta else None,
             )
             for x, y in product(range(nx), range(ny))
         )
@@ -206,7 +207,7 @@ def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix):
         # analyze spectrum and decide if we will skip or not. Can take
         # about 1s for big spectra, so do this only if we cannot load.
         if _skip(spec):
-            # print(f"Skipping ({x, y}), too many bad values")
+            print(f"Skipping ({x, y}), too many bad values")
             return None
 
         try:
@@ -244,9 +245,13 @@ def wrapper(args):
 
     "maxiter": int
 
+    'Unpacked' version of the spectral cube
+    ---------------------------------------
     "flux": array
 
     "uncertainty": StdDevUncertainty
+
+    "mask": mask, if any, to make the fit ignore points
 
     "instrument": str
         The contents of spec.meta["instrument"]
@@ -260,12 +265,16 @@ def wrapper(args):
     checkpoint_prefix = args["checkpoint_prefix"]
     maxiter = args["maxiter"]
 
+
     # Spectrum1D not picklable at the moment, so recreate it here (i.e.,
     # on the parallel process)
     spectral_axis = args["spectral_axis"]
     flux = args["flux"]
     uncertainty = args["uncertainty"]
+    mask = args['mask']
     spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
+    if mask is not None:
+        spec.mask = mask
     spec.meta = {k: args[k] for k in ("header", "instrument") if k in args}
 
     return x, y, _load_fit_save(x, y, spec, model, maxiter, checkpoint_prefix)
