@@ -10,37 +10,76 @@ from scipy import ndimage
 class MapCollection:
     """Object representing a collection of nd named maps with the same wcs."""
 
-    def __init__(self, names, shape):
+    def __init__(self, keys, shape):
         """
-        names: list of str
+        keys: list of str
 
         shape: nx, ny
         """
-        self.names = names
         self.shape = shape
-        self.data = np.zeros((len(names), *shape))
-        self.index = {name: i for i, name in enumerate(names)}
+        self.data = np.zeros((len(keys), *self.shape))
+        self.index = {k: i for i, k in enumerate(keys)}
+
+    def remove_zero_maps(self):
+        """Remove all maps that contain only zeros. Destructive.
+
+        Typically done after running a fit, and the data has been filled
+        in. After this operation, to get all maps back, you will need to
+        make a new object.
+        """
+        keys_to_remove = [
+            k for k, i in self.index.items() if np.count_nonzero(self.data[i]) == 0
+        ]
+        self.remove_unused_maps(keys_to_remove)
+
+    def remove_unused_maps(self, keys):
+        """Remove maps with the given keys.
+
+        Redundant keys to be removed are allowed, meaning that if given
+        key is not in map collection, this is safe and nothing will
+        happen. This not was written here, because this makes
+        implementing some things easier.
+
+        """
+        new_index = {}
+        keep_map = np.full(self.data.shape[0], True)
+
+        j = 0
+        for k, i in self.index.items():
+            # remove if key was specified, or if all values are zero
+            if k in keys:
+                keep_map[i] = False
+            else:
+                new_index[k] = j
+                j += 1
+
+        # keep only nonzero slices
+        self.index = new_index
+        self.data = self.data[keep_map]
+
+    def keys(self):
+        return self.index.keys()
 
     def __getitem__(self, name):
         """Access one of the maps using [name]"""
-        if name in self.names:
+        if name in self.index:
             return self.data[self.index[name]]
         else:
             raise RuntimeError(
                 f"Map of {name} not in map collection\n"
-                "Available names are" + str([k for k in self.index])
+                "Available keys are" + str([k for k in self.index])
             )
 
     def __setitem__(self, name, value):
-        if name in self.names:
+        if name in self.index:
             self.data[self.index[name]] = value
         else:
             raise RuntimeError(
                 f"Map of {name} not in map collection\n"
-                "Available names are" + str([k for k in self.index])
+                "Available keys are" + str([k for k in self.index])
             )
 
-    def plot_map_collage(self, names, nrows=1, titles=None, colorbar=False, **kwargs):
+    def plot_map_collage(self, keys, nrows=1, titles=None, colorbar=False, **kwargs):
         """
         Plot many maps in a compact way using subplots.
 
@@ -59,7 +98,7 @@ class MapCollection:
         Parameters
         ----------
 
-        names: list of str
+        keys: list of str
             Maps to plot. Might fail if these maps have mostly zeros.
 
         nrows: int
@@ -78,7 +117,7 @@ class MapCollection:
         fig, axes: figure and axes created by calling plt.subplots()
         """
         # find the ideal number of columns
-        nplots = len(names)
+        nplots = len(keys)
         q, r = divmod(nplots, nrows)
         ncols = q if r == 0 else q + 1
 
@@ -90,7 +129,7 @@ class MapCollection:
         biggest_x = 0
         biggest_y = 0
         ims = []
-        for i, (n, ax) in enumerate(zip(names, allaxes)):
+        for i, (n, ax) in enumerate(zip(keys, allaxes)):
             plot_info = self.plot_map(n, axes=ax, **kwargs)
             ims.append(plot_info["imshow_return"])
             biggest_x = max(plot_info["image"].shape[1], biggest_x)
@@ -302,8 +341,8 @@ class MapCollection:
         """
         nx, ny = self.data.shape[1:]
         num_rows = nx * ny
-        names = ["x", "y"] + [name for name in self.index]
-        table_data = np.zeros((num_rows, len(names)))
+        keys = ["x", "y"] + [name for name in self.index]
+        table_data = np.zeros((num_rows, len(keys)))
 
         # x and y
         for i, (x, y) in enumerate(it.product(range(nx), range(ny))):
@@ -311,7 +350,7 @@ class MapCollection:
             table_data[i, 1] = y
 
         # one column for every map
-        for j, map_name in enumerate(names[2:], start=2):
+        for j, map_name in enumerate(keys[2:], start=2):
             m = self[map_name]
             for i, (x, y) in enumerate(it.product(range(nx), range(ny))):
                 table_data[i, j] = m[x, y]
@@ -320,7 +359,7 @@ class MapCollection:
         nonzero = np.any(table_data[:, 2:], axis=1)
         n = np.count_nonzero(nonzero)
         print(f"{n}/{len(nonzero)} rows are nonzero")
-        t = Table(data=table_data[nonzero], names=names)
+        t = Table(data=table_data[nonzero], names=keys)
         t.write(fn, **table_write_kwargs)
 
 
@@ -330,10 +369,10 @@ def merge(mc1, mc2):
             f"MapCollections have shapes {mc1.shape} and {mc2.shape} but should be equal"
         )
 
-    mc_new = MapCollection([n for n in it.chain(mc1.names, mc2.names)], mc1.shape)
-    for n in mc1.names:
+    mc_new = MapCollection([n for n in it.chain(mc1.keys, mc2.keys)], mc1.shape)
+    for n in mc1.keys:
         mc_new[n] = mc1[n]
-    for n in mc2.names:
+    for n in mc2.keys:
         mc_new[n] = mc2[n]
 
     return mc_new

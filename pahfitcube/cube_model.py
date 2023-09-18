@@ -8,6 +8,7 @@ from multiprocess.pool import Pool
 from tqdm import tqdm
 from pathlib import Path
 import re
+
 # from astropy import units as u
 
 from pahfitcube.map_collection import MapCollection
@@ -32,7 +33,7 @@ class CubeModel:
     object."""
 
     def __init__(self, model: Model):
-        self.model = model
+        self.init_model = model
         self.flat_feature_names = unique_feature_dict(model).keys()
         self.maps = None
         self.models = {}
@@ -91,7 +92,7 @@ class CubeModel:
             dict(
                 x=x,
                 y=y,
-                model=self.model,
+                model=self.init_model,
                 checkpoint_prefix=checkpoint_prefix,
                 maxiter=maxiter,
                 spectral_axis=cube.spectral_axis,
@@ -175,11 +176,44 @@ class CubeModel:
         mc = MapCollection(["dust_continuum"], shape=self.maps.shape)
 
         for (x, y), model in self.models.items():
-            tab_spec = model.tabulate(inst, z, [dust_cont_wavelength], feature_mask=model.features['kind'] == 'dust_continuum')
+            tab_spec = model.tabulate(
+                inst,
+                z,
+                [dust_cont_wavelength],
+                feature_mask=model.features["kind"] == "dust_continuum",
+            )
             dust_continuum_value = tab_spec.flux[0].value
             mc["dust_continuum"][x, y] = dust_continuum_value
 
         return mc
+
+    def remove_unused_components(self, zero_fraction):
+        """Removes maps of all parameters for component's whose power is zero in too many pixels.
+
+        This utility makes the results more readable, by removing
+        clutter in the MapCollection object stored at self.maps.
+
+        zero_fraction: if the fraction of zero pixels in a power map,
+        above which a map will be flagged for removal
+
+        """
+        keys_to_remove = []
+        # go over all the component names, and check if that component
+        # is mostly zero everywhere. If so, remove the appropriate keys
+        # relating to that component (name_wavelength, name_fwhm, etc)
+        for name, kind in zip(
+            self.init_model.features["name"], self.init_model.features["kind"]
+        ):
+            if (
+                kind == "line" or kind == "dust_feature"
+            ) and name + "_power" in self.maps.keys():
+                power_map = self.maps[name + "_power"]
+                if np.count_nonzero(power_map) < zero_fraction * np.size(power_map):
+                    keys_to_remove.append(name + "_wavelength")
+                    keys_to_remove.append(name + "_power")
+                    keys_to_remove.append(name + "_fwhm")
+
+        self.maps.remove_unused_maps(keys_to_remove)
 
 
 def _skip(spec):
@@ -265,13 +299,12 @@ def wrapper(args):
     checkpoint_prefix = args["checkpoint_prefix"]
     maxiter = args["maxiter"]
 
-
     # Spectrum1D not picklable at the moment, so recreate it here (i.e.,
     # on the parallel process)
     spectral_axis = args["spectral_axis"]
     flux = args["flux"]
     uncertainty = args["uncertainty"]
-    mask = args['mask']
+    mask = args["mask"]
     spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
     if mask is not None:
         spec.mask = mask
