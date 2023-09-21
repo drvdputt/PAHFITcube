@@ -299,7 +299,7 @@ class MapCollection:
         )
         return plot_info
 
-    def save(self, wcs, fits_fn, transpose=False):
+    def save(self, wcs, fits_fn, transpose=True):
         """Save to one (or many?) files.
 
         Parameters
@@ -324,6 +324,42 @@ class MapCollection:
             hdu = fits.ImageHDU(data=image_array, header=header, name=k)
             new_hdul.append(hdu)
         new_hdul.writeto(fits_fn, overwrite=True)
+
+    @classmethod
+    def load(cls, fits_fn, transpose=True):
+        """Load MapCollection object from fits file
+
+        Easier way to recover the maps, compared to loading in all the
+        fit results again using a CubeModel object. This way, it is
+        straightforward to make the collage overview plot based on one
+        file.
+
+        Parameters
+        ----------
+
+        fits_fn : str
+            file name ending in '.fits'. File is in same format as
+            output of 'save()'
+
+        transpose : bool
+            Whether to transpose the images contained in the file upon
+            loading. True by default, as fits prefers yx while we use xy
+            (which is the specutils convention)
+
+        """
+        # Look at save function, and try to do the reverse
+        with fits.open(fits_fn) as hdul:
+            #  skip the primary hdu at '0'
+            keys = [hdu.name for hdu in hdul[1:]]
+            shape = hdul[1].shape[::-1] if transpose else hdul[1].shape
+            instance = cls(keys, shape)
+
+            # copy all image hdus
+            for i in range(1, len(hdul)):
+                hdu = hdul[i]
+                instance[hdu.name] = hdu.data.T if transpose else hdu.data
+
+        return instance
 
     def save_as_table(self, fn, wcs=None, **table_write_kwargs):
         """Save the map as an astropy table.
