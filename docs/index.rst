@@ -29,7 +29,7 @@ The goals listed above are explained in the following articles
 
    Preparing input data <cubes.rst>
    Fitting a cube <fitting.rst>
-   Vizualizing and exporting <vizualization.rst>
+   Visualizing and exporting <visualization.rst>
 
 Installation
 ============
