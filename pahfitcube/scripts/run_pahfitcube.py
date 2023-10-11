@@ -2,7 +2,7 @@
 from pahfit.scripts.run_pahfit import initialize_parser
 from pahfitcube.cube_model import CubeModel
 from pahfit.model import Model
-from pahfitcube.read_cube import read_cube
+from pahfitcube.iohacks import read_cube
 from pathlib import Path
 
 

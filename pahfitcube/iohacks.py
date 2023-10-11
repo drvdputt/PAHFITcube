@@ -3,14 +3,14 @@ from specutils import Spectrum1D
 from astropy.wcs import WCS
 from astropy.nddata import StdDevUncertainty
 import pickle
-from itertools import product
 import numpy as np
 from astropy.io import fits
 from pathlib import Path
 from astropy import units as u
 from astropy.table import Table
 
-def write_wavetab_cube(fn, cube_data, wave, spatial_wcs, wav_axis_index=-1):
+
+def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index=-1):
     """Write out cube data with unevenly spaced wavelengths
 
     Based on some code I found in the JWST package, cube_build/ifu_cube.py
@@ -18,9 +18,11 @@ def write_wavetab_cube(fn, cube_data, wave, spatial_wcs, wav_axis_index=-1):
     wav_axis_index default is -1, to conform with spectrum1D.
     """
     if wav_axis_index != 0:
-        data = np.moveaxis(cube_data, wav_axis_index, 0)
+        f = np.moveaxis(flux, wav_axis_index, 0)
+        unc = np.moveaxis(uncertainty, wav_axis_index, 0)
     else:
-        data = cube_data
+        f = flux
+        unc = uncertainty
 
     num = len(wave)
     header = spatial_wcs.to_header()
@@ -67,7 +69,8 @@ def write_wavetab_cube(fn, cube_data, wave, spatial_wcs, wav_axis_index=-1):
     # this header is now ready. It is attached to the main data
     # header["EXTNAME"] = 'SCI'
     new_hdul = fits.HDUList()
-    new_hdul.append(fits.ImageHDU(data=data, header=header, name="SCI"))
+    new_hdul.append(fits.ImageHDU(data=f, header=header, name="SCI"))
+    new_hdul.append(fits.ImageHDU(data=unc, header=header, name="ERR"))
 
     # jwst package creates wavelength table like this
     alldata = np.array([(wave[None].T,)], dtype=[("wavelength", "<f4", (num, 1))])
@@ -83,7 +86,7 @@ def write_wavetab_cube(fn, cube_data, wave, spatial_wcs, wav_axis_index=-1):
     new_hdul.writeto(fn, overwrite=True)
 
 
-def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
+def write_cube(fn, flux, uncertainty, wavs, spatial_wcs, spectral_axis=None):
     """Write out cube in fits format (for DS9) and as a pickle (for Spectrum1D)
 
     The pickle can be given to run_pahfit_cube, which will use its
@@ -98,6 +101,9 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     data: array (no unit!)
         flux (in MJy/sr). Last axis must be spectral, or spectral_axis
         should be set, so that it can be moved there.
+
+    uncertainty: array (no unit!)
+        uncertainty array to store. Same conventions as flux data
 
     wavs: array (no unit!)
         wavelengths in micron
@@ -114,8 +120,13 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     else:
         path = Path(fn)
 
-    write_wavetab_cube(
-        fn, data, wavs, spatial_wcs, -1 if spectral_axis is None else spectral_axis
+    _write_wavetab_cube(
+        fn,
+        flux,
+        uncertainty,
+        wavs,
+        spatial_wcs,
+        -1 if spectral_axis is None else spectral_axis,
     )
 
     # Ideally, I want to make a Spectrum1D, and save it as a fits file
@@ -123,13 +134,16 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
     # seem supported yet, so I resort to pickling the input data for
     # Spectrum1D below.
     if spectral_axis is not None:
-        spec1d_flux_array = np.moveaxis(data, spectral_axis, -1)
+        spec1d_flux_array = np.moveaxis(flux, spectral_axis, -1)
+        spec1d_unc_array = np.moveaxis(uncertainty, spectral_axis, -1)
         # spec1d_flux_array = np.moveaxis(data, spectral_axis, 0)
     else:
-        spec1d_flux_array = data
+        spec1d_flux_array = flux
+        spec1d_unc_array = uncertainty
 
     # MJy/sr
     spec1d_flux_array_with_units = spec1d_flux_array * u.MJy / u.sr
+    spec1d_unc_array_with_units = spec1d_unc_array * u.MJy / u.sr
 
     pickle_path = path.with_suffix(".pickle")
     with open(pickle_path, "wb") as f:
@@ -139,10 +153,29 @@ def write_cube(fn, data, wavs, spatial_wcs, spectral_axis=None):
         # merged cubes.
         obj = {
             "flux": spec1d_flux_array_with_units,
+            "uncertainty": spec1d_unc_array_with_units,
             "spectral_axis": wavs * u.micron,
             "spatial_wcs": spatial_wcs,
         }
         pickle.dump(obj, f)
+
+
+def write_s3d(fn, s: Spectrum1D, spatial_wcs):
+    """Utility to write cube from Spectrum1D
+
+    For now, due to hardcoding, this will only produce correct results
+    if the flux is in MJy / sr and the spectral axis is in micron.
+
+    will write both a fits file for DS9, and pickle that PAHFITcube can load
+
+    While the spatial WCS could be retrieved from the Spectrum1D meta
+    data, were asking for it explicitly here, since I found it not to
+    always be reliable.
+
+    """
+    write_cube(
+        fn, s.flux.value, s.uncertainty.array, s.spectral_axis.value, spatial_wcs
+    )
 
 
 def write_merged_cube_old(fn, data, wavs, spatial_wcs):
@@ -174,7 +207,7 @@ def write_merged_cube_old(fn, data, wavs, spatial_wcs):
     new_hdul.writeto(fn, overwrite=True)
 
 
-def read_cube(cubefile, only_one=False):
+def read_cube(cubefile):
     """
     Read data cube and determine which pixels are suitable for fitting.
 
@@ -218,14 +251,11 @@ def read_cube(cubefile, only_one=False):
             cube_2dwcs = data_dict["spatial_wcs"]
         except Exception as e:
             print(
-                "Something wrong with pickle. Needs to come from wcshacks.write_merged_cube."
+                "Something wrong with pickle. Needs to come from iohacks.write_merged_cube."
             )
             raise e
     else:
         raise ValueError("Cube file not compatible.")
 
     ny, nx, _ = spec.shape
-    xy_tuples = [(nx // 2, ny // 2)] if only_one else product(range(nx), range(ny))
-    # ^ has option to use only center pixel, useful for testing
-
-    return spec, xy_tuples, cube_2dwcs
+    return spec, cube_2dwcs
