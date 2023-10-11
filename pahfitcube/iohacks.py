@@ -1,3 +1,4 @@
+"""Tricks for saving and loading cube files, either pickle or fits."""
 from specutils import Spectrum1D
 from astropy.wcs import WCS
 from astropy.nddata import StdDevUncertainty
