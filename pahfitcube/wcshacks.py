@@ -95,7 +95,7 @@ def make_square_aperture_grid(
     return SkyRectangularAperture(positions, size, size)
 
 
-def reproject_cube_data(cube_data, cube_wcs, wcs, n0, n1):
+def reproject_cube_data(cube_data, cube_wcs, new_wcs, n0, n1):
     """Reproject every slice of cube onto wcs using n0, n1 grid
 
     This function assumes the spectrum1D convention of putting the
@@ -108,15 +108,17 @@ def reproject_cube_data(cube_data, cube_wcs, wcs, n0, n1):
     output_array: np.ndarray indexed on axis 0, axis 1, wavelength
 
     """
-    num_wavs = cube_data.shape[-1]
-    output_array = np.zeros((n0, n1, num_wavs))
-    for w in range(num_wavs):
-        output_array[..., w], footprint = reproject.reproject_adaptive(
-            input_data=(cube_data[..., w], cube_wcs),
-            output_projection=wcs,
-            shape_out=(n0, n1),
-        )
-    return output_array
+    # the reprojection is vectorized over the first axes. So if we move
+    # wavelength to the first index, we should be able to do all slices
+    # at once. At the end, move the wavelength axis back to the last
+    # index.
+    input_data = np.moveaxis(cube_data, 2, 0)
+    output_array, _ = reproject.reproject_adaptive(
+        input_data=(input_data, cube_wcs),
+        output_projection=new_wcs,
+        shape_out=(input_data.shape[0], n0, n1),
+    )
+    return np.moveaxis(output_array, 0, 2)
 
 
 def celestial_wcs_from_s1d(s):
@@ -124,21 +126,23 @@ def celestial_wcs_from_s1d(s):
     return WCS(s.meta["header"]).sub((1, 2))
 
 
-def reproject_s1d(s3d, wcs, nx, ny):
+def reproject_s1d(s3d, new_wcs, nx, ny):
     """Reproject every slice of Spectrum1D cube onto wcs using ny, nx grid
 
-    Reprojects both flux and uncertainty, and creates new Spectrum1D object. Metadata is copied over.
+    Reprojects both flux and uncertainty, and creates new Spectrum1D
+    object. Metadata is copied over.
 
     Returns
     -------
     new_s3d: new Spectrum1D object
+
     """
     old_wcs = celestial_wcs_from_s1d(s3d)
-    rpj_flux = reproject_cube_data(s3d.flux.value, old_wcs, wcs, nx, ny)
+    rpj_flux = reproject_cube_data(s3d.flux.value, old_wcs, new_wcs, nx, ny)
 
     if s3d.uncertainty is not None:
         rpj_unc = StdDevUncertainty(
-            reproject_cube_data(s3d.uncertainty.array, old_wcs, wcs, nx, ny)
+            reproject_cube_data(s3d.uncertainty.array, old_wcs, new_wcs, nx, ny)
         )
     else:
         rpj_unc = None
@@ -146,7 +150,7 @@ def reproject_s1d(s3d, wcs, nx, ny):
     new_s3d = Spectrum1D(
         rpj_flux * s3d.flux.unit, s3d.spectral_axis, uncertainty=rpj_unc, meta=s3d.meta
     )
-    add_celestial_wcs_to_s1d(new_s3d, wcs)
+    add_celestial_wcs_to_s1d(new_s3d, new_wcs)
     return new_s3d
 
 

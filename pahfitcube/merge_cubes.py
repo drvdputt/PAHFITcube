@@ -66,7 +66,7 @@ def main():
     )
 
 
-def rpj_all(specs, newwcs, nx, ny):
+def rpj_all(specs, new_wcs, nx, ny):
     """Parallel loop that reprojects cubes onto the same grid
 
     Parameters
@@ -86,7 +86,7 @@ def rpj_all(specs, newwcs, nx, ny):
         over, and the celestial WCS in the metadata has been adjusted.
 
     """
-    rpj_specs = [wcshacks.reproject_s1d(s3d, newwcs, nx, ny) for s3d in specs]
+    rpj_specs = [wcshacks.reproject_s1d(s3d, new_wcs, nx, ny) for s3d in specs]
     return rpj_specs
 
 
