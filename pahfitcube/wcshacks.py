@@ -5,6 +5,7 @@ import astropy.units as u
 from photutils import SkyRectangularAperture
 from astropy.nddata import StdDevUncertainty
 from specutils import Spectrum1D
+from copy import deepcopy
 
 
 def cube_wcs_extent(wcs, shape):
@@ -147,8 +148,12 @@ def reproject_s1d(s3d, new_wcs, nx, ny):
     else:
         rpj_unc = None
 
+    # deepcopies just to be sure. I've been burned by this before.
     new_s3d = Spectrum1D(
-        rpj_flux * s3d.flux.unit, s3d.spectral_axis, uncertainty=rpj_unc, meta=s3d.meta
+        rpj_flux * s3d.flux.unit,
+        deepcopy(s3d.spectral_axis),
+        uncertainty=rpj_unc,
+        meta=deepcopy(s3d.meta),
     )
     add_celestial_wcs_to_s1d(new_s3d, new_wcs)
     return new_s3d
@@ -172,5 +177,9 @@ def reproject_s1d(s3d, new_wcs, nx, ny):
 def add_celestial_wcs_to_s1d(s3d, wcs2d):
     """Add 2D wcs header to Spectrum1D.meta['header']"""
     spatial_header = wcs2d.to_header()
+    # deepcopy because if meta comes from another s3d object, both of
+    # their WCS will be changed
+    new_meta = deepcopy(s3d.meta)
     for key in spatial_header:
-        s3d.meta["header"][key] = spatial_header[key]
+        new_meta["header"][key] = spatial_header[key]
+    s3d.meta = new_meta
