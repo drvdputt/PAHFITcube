@@ -245,8 +245,7 @@ def read_cube(cubefile):
         try:
             flux = data_dict["flux"]
             spectral_axis = data_dict["spectral_axis"]
-            # mock the uncertainty to 10% for now
-            uncertainty = StdDevUncertainty(0.1 * flux)
+            uncertainty = StdDevUncertainty(data_dict["uncertainty"])
             spec = Spectrum1D(flux, spectral_axis, uncertainty=uncertainty)
             cube_2dwcs = data_dict["spatial_wcs"]
         except Exception as e:
