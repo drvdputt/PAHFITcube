@@ -24,6 +24,9 @@ def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index
         f = flux
         unc = uncertainty
 
+    f = np.swapaxes(f, 1, 2)
+    unc = np.swapaxes(f, 1, 2)
+
     num = len(wave)
     header = spatial_wcs.to_header()
     header["BUNIT"] = "MJy/sr"
@@ -50,14 +53,14 @@ def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index
     #   ifucube_model.meta.wcsinfo.pc1_3 = 0
     header["CUNIT3"] = "um"
     header["WCSAXES"] = 3
-    header["PC1_1"] = -1
-    header["PC1_2"] = 0
+    # header["PC1_1"] = -1
+    # header["PC1_2"] = 0
     header["PC1_3"] = 0
     #   ifucube_model.meta.wcsinfo.pc2_1 = 0
     #   ifucube_model.meta.wcsinfo.pc2_2 = 1
     #   ifucube_model.meta.wcsinfo.pc2_3 = 0
-    header["PC2_1"] = 0
-    header["PC2_2"] = 1
+    # header["PC2_1"] = 0
+    # header["PC2_2"] = 1
     header["PC2_3"] = 0
     #   ifucube_model.meta.wcsinfo.pc3_1 = 0
     #   ifucube_model.meta.wcsinfo.pc3_2 = 0
