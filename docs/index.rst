@@ -30,6 +30,7 @@ The goals listed above are explained in the following articles
    Preparing input data <cubes.rst>
    Fitting a cube <fitting.rst>
    Visualizing and exporting <visualization.rst>
+   Workarounds for common fitting issues <workarounds.rst>
 
 Installation
 ============
@@ -58,3 +59,4 @@ Getting Started
 
 WORK IN PROGRESS. Eventually, there should be a Jupyter notebook included in the
 repository with a basic setup.
+
