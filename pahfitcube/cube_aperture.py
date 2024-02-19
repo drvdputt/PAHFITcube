@@ -109,8 +109,8 @@ def cube_sky_aperture_extraction(
     masked_cube = array_mask[:, :, None] * np.ma.masked_invalid(cube_spec1d.data)
 
     # Add units again, and convert to MJy
-    area = (proj_plane_pixel_area(the_wcs_2d) * u.deg**2).to(u.sr)
-    masked_cube = masked_cube * cube_spec1d.flux.unit * area
+    one_px_area = (proj_plane_pixel_area(the_wcs_2d) * u.deg**2).to(u.sr)
+    masked_cube = masked_cube * cube_spec1d.flux.unit * one_px_area
 
     # collapse
     spectrum = np.sum(masked_cube, axis=(0, 1))
@@ -120,7 +120,7 @@ def cube_sky_aperture_extraction(
         masked_unc = array_mask[:, :, None] * np.ma.masked_invalid(
             cube_spec1d.uncertainty.array
         )
-        masked_unc = masked_unc * cube_spec1d.flux.unit * area
+        masked_unc = masked_unc * cube_spec1d.flux.unit * one_px_area
         # collapse the uncertainty. Variances = (mask value * sigma) **2
         sigmas = np.sqrt(np.sum(np.square(masked_unc), axis=(0, 1)))
     else:
@@ -130,7 +130,7 @@ def cube_sky_aperture_extraction(
         # total area of the unmasked pixels. Note that array_mask is
         # generally 0 or 1, but at the edges, there can be fractional
         # values.
-        masked_area = area * np.sum(array_mask)
+        masked_area = one_px_area * np.sum(array_mask)
         spectrum /= masked_area
         if sigmas is not None:
             sigmas /= masked_area
