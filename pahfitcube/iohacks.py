@@ -25,7 +25,7 @@ def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index
         unc = uncertainty
 
     f = np.swapaxes(f, 1, 2)
-    unc = np.swapaxes(f, 1, 2)
+    unc = np.swapaxes(unc, 1, 2)
 
     num = len(wave)
     header = spatial_wcs.to_header()
@@ -72,6 +72,7 @@ def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index
     # this header is now ready. It is attached to the main data
     # header["EXTNAME"] = 'SCI'
     new_hdul = fits.HDUList()
+    new_hdul.append(fits.PrimaryHDU())
     new_hdul.append(fits.ImageHDU(data=f, header=header, name="SCI"))
     new_hdul.append(fits.ImageHDU(data=unc, header=header, name="ERR"))
 
