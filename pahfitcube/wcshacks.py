@@ -122,10 +122,10 @@ def reproject_cube_data(cube_data, cube_wcs, new_wcs, n0, n1):
     return np.moveaxis(output_array, 0, 2)
 
 
-def celestial_wcs_from_s1d(s):
+def celestial_wcs_from_s3d(s):
     """s: Spectrum1D with 3D wcs in meta['header']"""
-    return WCS(s.meta["header"]).sub((1, 2))
-
+    # return WCS(s.meta["header"]).sub((1, 2))
+    return WCS(s.meta["header"]).celestial
 
 def reproject_s1d(s3d, new_wcs, nx, ny):
     """Reproject every slice of Spectrum1D cube onto wcs using ny, nx grid
@@ -138,7 +138,8 @@ def reproject_s1d(s3d, new_wcs, nx, ny):
     new_s3d: new Spectrum1D object
 
     """
-    old_wcs = celestial_wcs_from_s1d(s3d)
+    old_wcs = celestial_wcs_from_s3d(s3d)
+    print("reprojecting from", old_wcs, "to", new_wcs)
     rpj_flux = reproject_cube_data(s3d.flux.value, old_wcs, new_wcs, nx, ny)
 
     if s3d.uncertainty is not None:
