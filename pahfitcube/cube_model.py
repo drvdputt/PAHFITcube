@@ -259,7 +259,7 @@ def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix):
             if fn is not None:
                 model_xy.save(fn)
         except astropy.modeling.fitting.NonFiniteValueError as e:
-            print(f"Fit failed for pixel {x} {y} due to {e}")
+            print(f"Fit failed for pixel {x} {y} due to the following Exception: {e}")
 
     return model_xy
 
