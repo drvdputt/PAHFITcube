@@ -130,6 +130,21 @@ class CubeModel:
             for k, v in flat_result.items():
                 self.maps[k][x, y] = v
 
+    def get_spaxel_model(self, x, y):
+        """Get the individual PAHFIT model for a spaxel
+
+        Returns
+        -------
+        pahfit.Model fit to spaxel x, y, or None if no model was fit to
+        this spaxel.
+
+        """
+        k = (x, y)
+        if k in self.models:
+            return self.models[k]
+        else:
+            return None
+
     def plot_spaxel(self, cube, x, y, **kwargs):
         """Default PAHFIT plot for one of the spaxels
 
@@ -148,6 +163,7 @@ class CubeModel:
         #     print(error)
         #     print(f"Skipping plot x{x}y{y} due to the above error")
         #     return None
+
 
     def make_derived_maps(self, inst, z, dust_cont_wavelength):
         """Generate a number of specialty maps.
