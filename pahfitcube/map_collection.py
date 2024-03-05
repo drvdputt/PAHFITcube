@@ -361,23 +361,36 @@ class MapCollection:
 
         return instance
 
-    def save_as_table(self, fn, wcs=None, **table_write_kwargs):
+    def save_as_table(self, fn, wcs=None, ignore_patterns=None, **table_write_kwargs):
         """Save the map as an astropy table.
 
-        This way, it becomes easy to explore the data in glue or topcat
-        (e.g. figure out which part of the nebula a certaint grouping in
-        a scatter plot belongs to). The table contains one row per
-        pixel, has the following columns:
+        This way, it becomes easy to explore correlations and their
+        relationship to the spatial distribution, with tools such as
+        Glue or Topcat. The table contains one row per pixel, has the
+        following columns:
 
         x, y, <all map values>
 
         RA and DEC columns optional by providing spatial wcs (not
         implemented yet)
 
+        ignore_patterns: list of str
+            Maps of which the name contains any of the given substrings
+            will be ignored.
+
         """
+        if ignore_patterns is None:
+            keep_keys = [name for name in self.index]
+        else:
+            keep_keys = [
+                name
+                for name in self.index
+                if not any(pattern in name for pattern in ignore_patterns)
+            ]
+
         nx, ny = self.data.shape[1:]
         num_rows = nx * ny
-        keys = ["x", "y"] + [name for name in self.index]
+        keys = ["x", "y"] + keep_keys
         table_data = np.zeros((num_rows, len(keys)))
 
         # x and y
