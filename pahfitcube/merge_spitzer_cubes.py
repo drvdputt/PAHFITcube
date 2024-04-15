@@ -19,7 +19,7 @@ from pathlib import Path
 from matplotlib import pyplot as plt
 from dataclasses import dataclass
 from pahfitcube.plotting import plot_cube
-from pahfitcube import wcshacks
+from pahfitcube import wcshacks, iohacks
 
 
 @dataclass
@@ -41,7 +41,7 @@ class Cube:
 
         fn: file name string
         """
-        wcshacks.write_cube(
+        iohacks.write_cube(
             fn, self.data, self.wavelength, self.wcs, spectral_axis=0
         )
 
@@ -239,7 +239,7 @@ def merge_and_write_cubes(cubes, filename):
 
     if filename is not None:
         newwcs = cubes[0].wcs
-        wcshacks.write_cube(
+        iohacks.write_cube(
             filename, output_cube_array, output_wavs, newwcs, spectral_axis=0
         )
 

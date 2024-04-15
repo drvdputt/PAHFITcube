@@ -12,7 +12,7 @@ import argparse
 from specutils import Spectrum1D
 from astropy import units as u
 from astropy.wcs import WCS
-from pahfitcube import wcshacks
+from pahfitcube import wcshacks, iohacks
 from scipy.interpolate import interp1d
 from astropy.nddata import StdDevUncertainty
 
@@ -48,7 +48,7 @@ def main():
     # save individual reprojected cubes
     for i, s in enumerate(rpj_specs):
         rpj_fn = "rpj" + Path(args.cubes[i]).name
-        wcshacks.write_cube(
+        iohacks.write_cube(
             output_dir / rpj_fn,
             s.flux.value,
             s.spectral_axis.to(u.micron).value,
@@ -57,7 +57,7 @@ def main():
         )
 
     # save the big merged cube
-    wcshacks.write_cube(
+    iohacks.write_cube(
         output_dir / "reprojected_allcube.fits",
         output_cube_array,
         output_wavs,
