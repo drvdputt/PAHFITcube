@@ -39,31 +39,14 @@ def main():
     # reproject the data
     rpj_specs = rpj_all(specs, newwcs, ny, nx)
 
-    # merge into one big cube
-    output_wavs, output_cube_array = merge_wav_and_data_arrays(
-        [s.spectral_axis.to(u.micron).value for s in rpj_specs],
-        [s.flux.value for s in rpj_specs],
-    )
-
     # save individual reprojected cubes
     for i, s in enumerate(rpj_specs):
         rpj_fn = "rpj" + Path(args.cubes[i]).name
-        iohacks.write_cube(
-            output_dir / rpj_fn,
-            s.flux.value,
-            s.spectral_axis.to(u.micron).value,
-            newwcs,
-            spectral_axis=-1,
-        )
+        iohacks.write_s3d(output_dir / rpj_fn, s, newwcs)
 
-    # save the big merged cube
-    iohacks.write_cube(
-        output_dir / "reprojected_allcube.fits",
-        output_cube_array,
-        output_wavs,
-        newwcs,
-        spectral_axis=-1,
-    )
+    # merge the reprojected segments
+    output_spec = merge_nd(rpj_specs)
+    iohacks.write_s3d(output_dir / "reprojected_allcube.fits", output_spec, newwcs)
 
 
 def rpj_all(specs, new_wcs, nx, ny):
@@ -253,7 +236,7 @@ def make_usable_cube(cubes, wmin, wmax):
     ]
 
     # reproject everything to the WCS of the longest relevant cube
-    clong = use_cubes[-1]
+    clong = use_cubes[0]
     cwcs = WCS(clong.meta["header"]).celestial
     nx = clong.shape[0]
     ny = clong.shape[1]
