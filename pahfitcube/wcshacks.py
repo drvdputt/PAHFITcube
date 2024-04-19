@@ -127,6 +127,7 @@ def celestial_wcs_from_s3d(s):
     # return WCS(s.meta["header"]).sub((1, 2))
     return WCS(s.meta["header"]).celestial
 
+
 def reproject_s1d(s3d, new_wcs, nx, ny):
     """Reproject every slice of Spectrum1D cube onto wcs using ny, nx grid
 
@@ -144,7 +145,11 @@ def reproject_s1d(s3d, new_wcs, nx, ny):
 
     if s3d.uncertainty is not None:
         rpj_unc = StdDevUncertainty(
-            reproject_cube_data(s3d.uncertainty.array, old_wcs, new_wcs, nx, ny)
+            np.sqrt(
+                reproject_cube_data(
+                    np.square(s3d.uncertainty.array), old_wcs, new_wcs, nx, ny
+                )
+            )
         )
     else:
         rpj_unc = None
