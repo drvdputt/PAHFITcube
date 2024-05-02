@@ -11,10 +11,9 @@ and producing feature maps from the fit results.
 Usage
 -----
 
-.. note::
-   The guide below is somewhat outdated. I am in the process of updating the
-   sections below, and moving them to the appropriate pages on the new
-   `readthedocs site for PAHFITCube <https://pahfitcube.readthedocs.io>`_.
+See the main articles on the `readthedocs site for PAHFITCube
+<https://pahfitcube.readthedocs.io>`_, or one of the example notebooks
+(PAHFITbooks repository coming soon.)
 
 License
 -------
