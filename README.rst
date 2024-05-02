@@ -11,6 +11,11 @@ and producing feature maps from the fit results.
 Usage
 -----
 
+.. note::
+   The guide below is somewhat outdated. I am in the process of updating the
+   sections below, and moving them to the appropriate pages on the new
+   `readthedocs site for PAHFITCube <https://pahfitcube.readthedocs.io>`_.
+
 Using the ``-j <nprocs>`` option will run the fits in parallel with the given number of
 processes. Currently there’s also a basic ``--resume`` option, which skips pixels when their
 output file is already present. It loads the fit results for those pixels from the output files
