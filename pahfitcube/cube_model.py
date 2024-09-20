@@ -21,7 +21,7 @@ def unique_feature_dict(model: Model):
         base_name = row["name"]
         for col in ["temperature", "tau", "wavelength", "power", "fwhm"]:
             # do not add unused parameters. But make exception for line FWHM.
-            if not row[col].mask[0] or row["kind"] == "line" and col == "fwhm":
+            if not (row[col] is np.ma.masked) or row["kind"] == "line" and col == "fwhm":
                 d[f"{base_name}_{col}"] = row[col][0]
     return d
 
