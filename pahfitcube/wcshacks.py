@@ -2,7 +2,7 @@ from astropy.wcs import WCS
 import reproject
 import numpy as np
 import astropy.units as u
-from photutils import SkyRectangularAperture
+from photutils.aperture import SkyRectangularAperture
 from astropy.nddata import StdDevUncertainty
 from specutils import Spectrum1D
 from copy import deepcopy
