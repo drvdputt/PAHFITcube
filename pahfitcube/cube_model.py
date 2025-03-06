@@ -21,7 +21,11 @@ def unique_feature_dict(model: Model):
         base_name = row["name"]
         for col in ["temperature", "tau", "wavelength", "power", "fwhm"]:
             # do not add unused parameters. But make exception for line FWHM.
-            if not (row[col] is np.ma.masked) or row["kind"] == "line" and col == "fwhm":
+            if (
+                not (row[col] is np.ma.masked)
+                or row["kind"] == "line"
+                and col == "fwhm"
+            ):
                 d[f"{base_name}_{col}"] = row[col][0]
     return d
 
@@ -67,7 +71,14 @@ class CubeModel:
 
         return instance
 
-    def fit(self, cube: Spectrum1D, checkpoint_prefix=None, maxiter=1000, j=1):
+    def fit(
+        self,
+        cube: Spectrum1D,
+        checkpoint_prefix=None,
+        maxiter=1000,
+        j=1,
+        pahfit_guess=False,
+    ):
         """Fit the same PAHFIT model to each spaxel of a given cube.
 
         checkpoint_prefix : str
@@ -80,13 +91,19 @@ class CubeModel:
             loaded instead of fitted. This way, fit also acts as a
             loading function.
 
+        pahfit_guess : bool
+            If True, use the guess() method of the PAHFIT Model (which
+            means the initial guess given to this CubeModel at setup
+            will be ignored).
+
         """
         # I'm being explicit here as a reminder that spectrum1D works
         # with nx, ny, nw! Note that a FITS HDU has nw, ny, nx!
         nx, ny = cube.shape[:-1]
         self.maps = MapCollection(self.flat_feature_names, (nx, ny))
 
-        # argument generator. Need to unwrap a lot of things to avoid
+        # Generator for arguments that will be passed to parallel
+        # wrapper function. Need to unwrap a lot of things to avoid
         # unpicklable things.
         args_it = (
             dict(
@@ -95,6 +112,7 @@ class CubeModel:
                 model=self.init_model,
                 checkpoint_prefix=checkpoint_prefix,
                 maxiter=maxiter,
+                pahfit_guess=pahfit_guess,
                 spectral_axis=cube.spectral_axis,
                 flux=cube.flux[x, y],
                 uncertainty=cube.uncertainty[x, y],
@@ -163,7 +181,6 @@ class CubeModel:
         #     print(error)
         #     print(f"Skipping plot x{x}y{y} due to the above error")
         #     return None
-
 
     def make_derived_maps(self, inst, z, dust_cont_wavelength):
         """Generate a number of specialty maps.
@@ -239,43 +256,47 @@ def _skip(spec):
     return too_many_zeros or too_many_nan
 
 
-def _fn(x, y, checkpoint_prefix):
+def _result_filename(x, y, checkpoint_prefix):
     if checkpoint_prefix is None:
         return None
 
     return f"{checkpoint_prefix}_xy_{x}_{y}.ecsv"
 
 
-def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix):
-    # get the model by loading or fitting
-    fn = _fn(x, y, checkpoint_prefix)
+def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix, pahfit_guess):
     model_xy = None
+
+    # shortcut: if model file already exists at given directory, just
+    # load the model and return it
+    fn = _result_filename(x, y, checkpoint_prefix)
     if fn is not None and isfile(fn):
-        # print(f"Loading {fn}", end="\r")
-        model_xy = Model.from_saved(fn)
-    else:
-        # analyze spectrum and decide if we will skip or not. Can take
-        # about 1s for big spectra, so do this only if we cannot load.
-        if _skip(spec):
-            print(f"Skipping ({x, y}), too many bad values")
-            return None
+        return Model.from_saved(fn)
+
+    # analyze spectrum and decide if we will skip or not. Can take
+    # about 1s for big spectra, so do this only if we cannot load.
+    if _skip(spec):
+        print(f"Skipping ({x, y}), too many bad values")
+        return None
+
+    try:
+        # copy so we don't overwrite the initial conditions
+        model_xy = Model(model.features.copy())
+
+        if pahfit_guess:
+            model_xy.guess(spec)
 
         try:
-            # copy so we don't overwrite the initial conditions
-            # model_xy = Modelmodel.copy()
-            model_xy = Model(model.features.copy())
-            try:
-                model_xy.fit(spec, maxiter=maxiter, verbose=False)
-            except TypeError as e:
-                print(f"caught {e} in cube_model fit")
-                print("x, y = ", (x, y))
-                print("spec = ", spec)
-                raise e
-            # save result if checkpoint path was provided
-            if fn is not None:
-                model_xy.save(fn)
-        except astropy.modeling.fitting.NonFiniteValueError as e:
-            print(f"Fit failed for pixel {x} {y} due to the following Exception: {e}")
+            model_xy.fit(spec, maxiter=maxiter, verbose=False)
+        except TypeError as e:
+            print(f"caught {e} in cube_model fit")
+            print("x, y = ", (x, y))
+            print("spec = ", spec)
+            raise e
+        # save result if checkpoint path was provided
+        if fn is not None:
+            model_xy.save(fn)
+    except astropy.modeling.fitting.NonFiniteValueError as e:
+        print(f"Fit failed for pixel {x} {y} due to the following Exception: {e}")
 
     return model_xy
 
@@ -294,6 +315,8 @@ def wrapper(args):
     "checkpoint_prefix": str
 
     "maxiter": int
+
+    "pahfit_guess": bool
 
     'Unpacked' version of the spectral cube
     ---------------------------------------
@@ -314,6 +337,7 @@ def wrapper(args):
     model = args["model"]
     checkpoint_prefix = args["checkpoint_prefix"]
     maxiter = args["maxiter"]
+    pahfit_guess = args["pahfit_guess"]
 
     # Spectrum1D not picklable at the moment, so recreate it here (i.e.,
     # on the parallel process)
@@ -326,4 +350,10 @@ def wrapper(args):
         spec.mask = mask
     spec.meta = {k: args[k] for k in ("header", "instrument") if k in args}
 
-    return x, y, _load_fit_save(x, y, spec, model, maxiter, checkpoint_prefix)
+    return (
+        x,
+        y,
+        _load_fit_save(
+            x, y, spec, model, maxiter, checkpoint_prefix, pahfit_guess=pahfit_guess
+        ),
+    )
