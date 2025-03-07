@@ -168,15 +168,54 @@ class MapCollection:
         rescale=False,
     ):
         """
+        Plot map with some commonly useful options.
+
+        Some of this is definitely overengineered.
+
+        Parameters
+        ----------
+
+        name: str
+            Key of the map to plot
+
+        log_color: bool
+            Use log scale for color map
+
+        axes: Axes
+            If None, create axes using plt.figure(). Else use the provided axes.
+
+        with_title: bool
+            Use map name as title
+
+        rotate_angle: float
+            Apply rotation angle in degrees to image array before
+            plotting.
+
+        autocrop: bool
+            Automatically crop off rows and columns at the edges that
+            are zero. Context: After rotating, the array is expanded to
+            fit the rotated rectangle. The empty spaces are filled with
+            zeros.
+
+        manualcrop: [int, int, int, int]
+            Slice the (optinally rotated) array using the given range
+            [xmin, xmax, ymin, ymax]. If autocrop is activated, a set of
+            numbers will be printed, which can be copy-pasted to be used
+            as this argument to reuse the same cropping later.
+
         rescale: bool
-           Rescale the range of the quantities shown to pmin, pmax percentiles
+            Rescale and shift the map values so that they span from 0 to
+            1, where the latter number represents the linear position
+            between the 1st and 99th percentiles. Useful when a shared
+            colorbar is used between different plots. TODO: implement
+            configurable pmin, pmax.
+
         """
         if np.count_nonzero(self[name]) == 0:
             raise ValueError(
                 f"Map with name {name} has all zeros and can therefore not be plotted"
             )
 
-        """Utility function dealing with the most common plotting issues"""
         if axes is None:
             plt.figure()
             ax = plt.gca()
