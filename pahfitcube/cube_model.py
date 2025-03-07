@@ -41,6 +41,7 @@ class CubeModel:
         self.flat_feature_names = unique_feature_dict(model).keys()
         self.maps = None
         self.models = {}
+        self.prefix = None
 
     @classmethod
     def load(cls, nx, ny, prefix):
@@ -69,19 +70,22 @@ class CubeModel:
             y = int(m[2])
             instance._ingest_single_model(model, x, y)
 
+        # prefix is remembered so it can be included in metadata when
+        # results are exported to file
+        instance.prefix = prefix
         return instance
 
     def fit(
         self,
         cube: Spectrum1D,
-        checkpoint_prefix=None,
+        prefix=None,
         maxiter=1000,
         j=1,
         pahfit_guess=False,
     ):
         """Fit the same PAHFIT model to each spaxel of a given cube.
 
-        checkpoint_prefix : str
+        prefix : str
             e.g. "path/to/dir/prefix_"
 
             Where progress files are stored, so fitting can be
@@ -110,7 +114,7 @@ class CubeModel:
                 x=x,
                 y=y,
                 model=self.init_model,
-                checkpoint_prefix=checkpoint_prefix,
+                prefix=prefix,
                 maxiter=maxiter,
                 pahfit_guess=pahfit_guess,
                 spectral_axis=cube.spectral_axis,
@@ -133,7 +137,7 @@ class CubeModel:
         if j > 1:
             with Pool(j) as p:
                 # version with parallel Pool.imap
-                fit_loop(p.imap(wrapper, args_it, chunksize=16))
+                fit_loop(p.imap(wrapper, args_it, chunksize=1))
 
         else:
             # version with regular loop
@@ -248,6 +252,24 @@ class CubeModel:
 
         self.maps.remove_unused_maps(keys_to_remove)
 
+    def export_maps(self, wcs, fits_fn):
+        """Save fit results as maps
+
+        Wrapper around MapCollection.save(). Will include the location
+        of the PAHFIT models in the fits header as a reminder
+
+        Parameters
+        ----------
+
+        wcs : WCS
+            celestial WCS that matches the last two dimensions of the data shape
+
+        fits_fn : str
+            file name ending in ".fits"
+
+        """
+        self.maps.save(wcs, fits_fn, meta={"PAHFITSD": self.prefix})
+
 
 def _skip(spec):
     num_wav = len(spec.wavelength)
@@ -256,19 +278,19 @@ def _skip(spec):
     return too_many_zeros or too_many_nan
 
 
-def _result_filename(x, y, checkpoint_prefix):
-    if checkpoint_prefix is None:
+def _result_filename(x, y, prefix):
+    if prefix is None:
         return None
 
-    return f"{checkpoint_prefix}_xy_{x}_{y}.ecsv"
+    return f"{prefix}_xy_{x}_{y}.ecsv"
 
 
-def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix, pahfit_guess):
+def _load_fit_save(x, y, spec, model: Model, maxiter, prefix, pahfit_guess):
     model_xy = None
 
     # shortcut: if model file already exists at given directory, just
     # load the model and return it
-    fn = _result_filename(x, y, checkpoint_prefix)
+    fn = _result_filename(x, y, prefix)
     if fn is not None and isfile(fn):
         return Model.from_saved(fn)
 
@@ -292,7 +314,7 @@ def _load_fit_save(x, y, spec, model: Model, maxiter, checkpoint_prefix, pahfit_
             print("x, y = ", (x, y))
             print("spec = ", spec)
             raise e
-        # save result if checkpoint path was provided
+        # save result if prefix was provided
         if fn is not None:
             model_xy.save(fn)
     except astropy.modeling.fitting.NonFiniteValueError as e:
@@ -312,7 +334,7 @@ def wrapper(args):
 
     "model": the pahfit Model
 
-    "checkpoint_prefix": str
+    "prefix": str
 
     "maxiter": int
 
@@ -335,7 +357,7 @@ def wrapper(args):
     x = args["x"]
     y = args["y"]
     model = args["model"]
-    checkpoint_prefix = args["checkpoint_prefix"]
+    prefix = args["prefix"]
     maxiter = args["maxiter"]
     pahfit_guess = args["pahfit_guess"]
 
@@ -353,7 +375,5 @@ def wrapper(args):
     return (
         x,
         y,
-        _load_fit_save(
-            x, y, spec, model, maxiter, checkpoint_prefix, pahfit_guess=pahfit_guess
-        ),
+        _load_fit_save(x, y, spec, model, maxiter, prefix, pahfit_guess=pahfit_guess),
     )

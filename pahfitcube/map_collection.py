@@ -299,7 +299,7 @@ class MapCollection:
         )
         return plot_info
 
-    def save(self, wcs, fits_fn, transpose=True):
+    def save(self, wcs, fits_fn, transpose=True, meta=None):
         """Save to one (or many?) files.
 
         Parameters
@@ -315,14 +315,25 @@ class MapCollection:
             Swap the spatial dimensions of the data. Use when the WCS
             has the y direction as axis 0, and the x direction as axis
             1.
+
+        meta : dict {str: value}
+            Metadata to add as extra header entries in the fits file.
+            Specified as dictionary {HEADER_KEY: HEADER_VALUE, ...}
+
         """
         header = wcs.to_header()
+        # add extra header keywords if requested
+        if meta is not None:
+            for k, v in meta.items():
+                header[k] = v
+
         new_hdul = fits.HDUList()
         for k, i in self.index.items():
             data_slice = self.data[i]
             image_array = data_slice.T if transpose else data_slice
             hdu = fits.ImageHDU(data=image_array, header=header, name=k)
             new_hdul.append(hdu)
+
         new_hdul.writeto(fits_fn, overwrite=True)
 
     @classmethod
