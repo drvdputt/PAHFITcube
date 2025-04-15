@@ -5,6 +5,7 @@ from matplotlib.colors import LogNorm
 import itertools as it
 from astropy.table import Table
 from scipy import ndimage
+from astropy.wcs import WCS
 
 
 class MapCollection:
@@ -338,7 +339,7 @@ class MapCollection:
         )
         return plot_info
 
-    def save(self, wcs, fits_fn, transpose=True, meta=None):
+    def save(self, wcs: WCS, fits_fn, transpose=True, meta=None):
         """Save to one (or many?) files.
 
         Parameters
@@ -411,7 +412,9 @@ class MapCollection:
 
         return instance
 
-    def save_as_table(self, fn, wcs=None, ignore_patterns=None, **table_write_kwargs):
+    def save_as_table(
+        self, fn, wcs: WCS = None, ignore_patterns=None, **table_write_kwargs
+    ):
         """Save the map as an astropy table.
 
         This way, it becomes easy to explore correlations and their
@@ -440,7 +443,11 @@ class MapCollection:
 
         nx, ny = self.data.shape[1:]
         num_rows = nx * ny
-        keys = ["x", "y"] + keep_keys
+        keys = ["x", "y"]
+        if wcs is not None:
+            keys += ["ra", "dec"]
+        start_rest = len(keys)
+        keys += keep_keys
         table_data = np.zeros((num_rows, len(keys)))
 
         # x and y
@@ -448,8 +455,14 @@ class MapCollection:
             table_data[i, 0] = x
             table_data[i, 1] = y
 
+        # RA and Dec if wcs is given
+        if wcs is not None:
+            ra, dec = wcs.pixel_to_world_values(table_data[:, 0], table_data[:, 1])
+            table_data[:, 2] = ra
+            table_data[:, 3] = dec
+
         # one column for every map
-        for j, map_name in enumerate(keys[2:], start=2):
+        for j, map_name in enumerate(keys[start_rest:], start=start_rest):
             m = self[map_name]
             for i, (x, y) in enumerate(it.product(range(nx), range(ny))):
                 table_data[i, j] = m[x, y]
