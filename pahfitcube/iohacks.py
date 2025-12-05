@@ -10,7 +10,7 @@ from astropy import units as u
 from astropy.table import Table
 
 
-def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index=-1):
+def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index=0):
     """Write out cube data with unevenly spaced wavelengths
 
     Based on some code I found in the JWST package, cube_build/ifu_cube.py
@@ -23,9 +23,6 @@ def _write_wavetab_cube(fn, flux, uncertainty, wave, spatial_wcs, wav_axis_index
     else:
         f = flux
         unc = uncertainty
-
-    f = np.swapaxes(f, 1, 2)
-    unc = np.swapaxes(unc, 1, 2)
 
     num = len(wave)
     header = spatial_wcs.to_header()
@@ -103,7 +100,7 @@ def write_cube(fn, flux, uncertainty, wavs, spatial_wcs, spectral_axis=None):
         file name
 
     data: array (no unit!)
-        flux (in MJy/sr). Last axis must be spectral, or spectral_axis
+        flux (in MJy/sr). First axis must be spectral, or spectral_axis
         should be set, so that it can be moved there.
 
     uncertainty: array (no unit!)
@@ -130,7 +127,7 @@ def write_cube(fn, flux, uncertainty, wavs, spatial_wcs, spectral_axis=None):
         uncertainty,
         wavs,
         spatial_wcs,
-        -1 if spectral_axis is None else spectral_axis,
+        0 if spectral_axis is None else spectral_axis,
     )
 
     # Ideally, I want to make a Spectrum1D, and save it as a fits file
