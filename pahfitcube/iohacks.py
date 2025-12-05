@@ -234,7 +234,7 @@ def read_cube(cubefile):
     wcs: the spatial wcs
 
     """
-    if cubefile.endswith(".fits"):
+    if "fits" in cubefile:
         # Try to load in this way. Confirmed to work for JWST cubes.
         # Other cubes might need 'format' argument.
         spec = Spectrum1D.read(cubefile)

@@ -6,6 +6,7 @@ import itertools as it
 from astropy.table import Table
 from scipy import ndimage
 from astropy.wcs import WCS
+from warnings import warn
 
 
 class MapCollection:
@@ -339,7 +340,7 @@ class MapCollection:
         )
         return plot_info
 
-    def save(self, wcs: WCS, fits_fn, transpose=True, meta=None):
+    def save(self, wcs: WCS, fits_fn, transpose=True, meta=None, extra_maps=None):
         """Save to one (or many?) files.
 
         Parameters
@@ -360,6 +361,11 @@ class MapCollection:
             Metadata to add as extra header entries in the fits file.
             Specified as dictionary {HEADER_KEY: HEADER_VALUE, ...}
 
+        extra_maps : dict {str: array}
+            Add manually defined maps to the output, by providing a dict
+            of arrays. Arrays should be the same shape, and keys should
+            not overlap with existing keys.
+
         """
         header = wcs.to_header()
         # add extra header keywords if requested
@@ -373,6 +379,19 @@ class MapCollection:
             image_array = data_slice.T if transpose else data_slice
             hdu = fits.ImageHDU(data=image_array, header=header, name=k)
             new_hdul.append(hdu)
+
+        if extra_maps is not None:
+            for k, i in extra_maps.items():
+                if k in self.index:
+                    warn(f"Key {k} already in MapCollection index. Skipping.")
+                    continue
+                if i.shape != self.shape:
+                    warn(
+                        f"Extra map {k} has different dimensions ({i.shape}) than the MapCollection ({self.shape})."
+                    )
+                image_array = i.T if transpose else i
+                hdu = fits.ImageHDU(data=image_array, header=header, name=k)
+                new_hdul.append(hdu)
 
         new_hdul.writeto(fits_fn, overwrite=True)
 

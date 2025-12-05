@@ -101,9 +101,8 @@ class CubeModel:
             will be ignored).
 
         """
-        # I'm being explicit here as a reminder that spectrum1D works
-        # with nx, ny, nw! Note that a FITS HDU has nw, ny, nx!
-        nx, ny = cube.shape[:-1]
+        # newest version of specutils will load cubes as (w, y, x)
+        nx, ny = cube.shape[2], cube.shape[1]
         self.maps = MapCollection(self.flat_feature_names, (nx, ny))
 
         # Generator for arguments that will be passed to parallel
@@ -118,9 +117,9 @@ class CubeModel:
                 maxiter=maxiter,
                 pahfit_guess=pahfit_guess,
                 spectral_axis=cube.spectral_axis,
-                flux=cube.flux[x, y],
-                uncertainty=cube.uncertainty[x, y],
-                mask=cube.mask[x, y],
+                flux=cube.flux[:, y, x],
+                uncertainty=cube.uncertainty[:, y, x],
+                mask=None if cube.mask is None else cube.mask[:, y, x],
                 # meta can contain unpicklable things, so unpack the necessary parts here
                 instrument=cube.meta["instrument"],
                 # header=cube.meta["header"] if "header" in cube.meta else None,
@@ -252,7 +251,7 @@ class CubeModel:
 
         self.maps.remove_unused_maps(keys_to_remove)
 
-    def export_maps(self, wcs, fits_fn):
+    def export_maps(self, wcs, fits_fn, extra_maps=None):
         """Save fit results as maps
 
         Wrapper around MapCollection.save(). Will include the location
@@ -268,7 +267,9 @@ class CubeModel:
             file name ending in ".fits"
 
         """
-        self.maps.save(wcs, fits_fn, meta={"PAHFITSD": self.prefix})
+        self.maps.save(
+            wcs, fits_fn, meta={"PAHFITSD": self.prefix}, extra_maps=extra_maps
+        )
 
 
 def _skip(spec):
